@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Gửi đề nghị nhập hàng | Quản lý Kho và Chuỗi cung ứng Cửa Hàng OldSchool{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="fw-bold mb-0"><i class="bi bi-send me-2"></i>Gửi đề nghị nhập hàng</h4>
+    <p class="text-muted small mb-0">Đề nghị gửi đến ADMIN để tham khảo, không tạo phiếu nhập hoặc thay đổi tồn kho.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <a href="{% url 'purchasing:import_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Quay lại danh sách phiếu nhập
+    </a>
+    <a href="{% url 'inventory:download_template' 'restock-request' %}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-download me-1"></i>Tải file Excel mẫu (.xlsx)
+    </a>
+  </div>
+</div>
+
+<div class="os-card p-3 mb-4">
+  <form method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
+    {% csrf_token %}
+    <input type="hidden" name="form_action" value="upload_excel">
+    <div class="col-md-4">
+      <label class="form-label small fw-bold mb-1">
+        <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>Tải dữ liệu SKU từ file Excel (.xlsx)
+      </label>
+      <input type="file" name="excel_file" accept=".xlsx" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-3 mt-4">
+      <button type="submit" class="btn btn-sm btn-success">
+        <i class="bi bi-upload me-1"></i>Đọc & Kiểm tra file Excel
+      </button>
+    </div>
+  </form>
+</div>
+
+<div class="os-card p-3">
+  <form method="post" action="{% url 'purchasing:stock_restock_request' %}" id="restockRequestForm">
+    {% csrf_token %}
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div>
+        <h6 class="fw-bold mb-1">Danh sách SKU đề nghị</h6>
+        <div class="small text-muted">Tồn kho hiển thị tại CS1.</div>
+      </div>
+      <button type="button" class="btn btn-sm btn-os-tan" id="addSkuButton">
+        <i class="bi bi-plus-lg me-1"></i>Thêm SKU
+      </button>
+    </div>
+
+    <div id="skuRows" class="d-flex flex-column gap-2">
+      {% for row in initial_rows %}
+      <div class="row g-2 align-items-end sku-request-row">
+        <div class="col-lg-7">
+          <label class="form-label small fw-semibold">SKU</label>
+          <select name="variant_id" class="form-select sku-select" required>
+            <option value="">-- Chọn SKU --</option>
+            {% for variant in active_variants %}
+            <option value="{{ variant.id }}" data-stock="{{ variant.request_stock }}" {% if row.variant_id == variant.id|stringformat:"s" %}selected{% endif %}>
+              {{ variant.ma_sku }} — {{ variant.san_pham.ten_hang_hoa }} ({{ variant.mau_sac }}/{{ variant.kich_co }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-2 col-sm-4">
+          <label class="form-label small fw-semibold">Tồn kho CS1</label>
+          <output class="form-control bg-light current-stock" aria-live="polite">—</output>
+        </div>
+        <div class="col-lg-2 col-sm-5">
+          <label class="form-label small fw-semibold">Số lượng đề nghị</label>
+          <input type="number" name="quantity" class="form-control" min="1" step="1" value="{{ row.quantity }}" required>
+        </div>
+        <div class="col-lg-1 col-sm-3">
+          <button type="button" class="btn btn-outline-danger w-100 remove-sku-row" title="Xóa SKU" aria-label="Xóa SKU">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="mt-4">
+      <label for="requestReason" class="form-label small fw-semibold">Lý do đề nghị <span class="text-danger">*</span></label>
+      <textarea id="requestReason" name="reason" class="form-control" rows="4" maxlength="1000" required>{{ reason }}</textarea>
+      <div class="form-text">Tối đa 1000 ký tự. Lý do áp dụng chung cho tất cả SKU trong đề nghị.</div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-3">
+      <a href="{% url 'purchasing:import_list' %}" class="btn btn-outline-secondary">Hủy</a>
+      <button type="submit" class="btn btn-os-primary">
+        <i class="bi bi-send me-1"></i>Gửi đến ADMIN
+      </button>
+    </div>
+  </form>
+</div>
+
+<template id="skuRowTemplate">
+  <div class="row g-2 align-items-end sku-request-row">
+    <div class="col-lg-7">
+      <label class="form-label small fw-semibold">SKU</label>
+      <select name="variant_id" class="form-select sku-select" required>
+        <option value="">-- Chọn SKU --</option>
+        {% for variant in active_variants %}
+        <option value="{{ variant.id }}" data-stock="{{ variant.request_stock }}">
+          {{ variant.ma_sku }} — {{ variant.san_pham.ten_hang_hoa }} ({{ variant.mau_sac }}/{{ variant.kich_co }})
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-lg-2 col-sm-4">
+      <label class="form-label small fw-semibold">Tồn kho CS1</label>
+      <output class="form-control bg-light current-stock" aria-live="polite">—</output>
+    </div>
+    <div class="col-lg-2 col-sm-5">
+      <label class="form-label small fw-semibold">Số lượng đề nghị</label>
+      <input type="number" name="quantity" class="form-control" min="1" step="1" required>
+    </div>
+    <div class="col-lg-1 col-sm-3">
+      <button type="button" class="btn btn-outline-danger w-100 remove-sku-row" title="Xóa SKU" aria-label="Xóa SKU">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+  </div>
+</template>
+
+<script>
+  (() => {
+    const rows = document.getElementById("skuRows");
+    const addButton = document.getElementById("addSkuButton");
+    const template = document.getElementById("skuRowTemplate");
+
+    const updateAddButton = () => {
+      addButton.disabled = false;
+    };
+
+    const syncSkuOptions = () => {
+      const selects = [...rows.querySelectorAll(".sku-select")];
+      const selectedValues = selects.map((select) => select.value).filter(Boolean);
+      selects.forEach((select) => {
+        [...select.options].forEach((option) => {
+          option.disabled =
+            Boolean(option.value) &&
+            selectedValues.includes(option.value) &&
+            select.value !== option.value;
+        });
+      });
+    };
+
+    rows.addEventListener("change", (event) => {
+      if (!event.target.matches(".sku-select")) return;
+      const option = event.target.selectedOptions[0];
+      event.target.closest(".sku-request-row").querySelector(".current-stock").value =
+        option && option.value ? option.dataset.stock : "—";
+      syncSkuOptions();
+    });
+
+    rows.addEventListener("click", (event) => {
+      const removeButton = event.target.closest(".remove-sku-row");
+      if (!removeButton) return;
+      const row = removeButton.closest(".sku-request-row");
+      row.remove();
+      syncSkuOptions();
+      updateAddButton();
+    });
+
+    addButton.addEventListener("click", () => {
+      rows.append(template.content.cloneNode(true));
+      syncSkuOptions();
+      updateAddButton();
+    });
+
+    rows.querySelectorAll(".sku-select").forEach((select) => {
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    syncSkuOptions();
+    updateAddButton();
+  })();
+</script>
+{% endblock %}

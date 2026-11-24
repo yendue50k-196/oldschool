@@ -6,7 +6,6 @@ from django.utils import timezone
 
 
 class NhaCungCap(models.Model):
-    """Supplier master entity (Bảng 56 - NhaCungCap)."""
 
     ma_nha_cung_cap = models.CharField("Mã nhà cung cấp", max_length=50, unique=True, db_index=True)
     ten_nha_cung_cap = models.CharField("Tên nhà cung cấp", max_length=200, db_index=True)
@@ -26,7 +25,6 @@ class NhaCungCap(models.Model):
 
 
 class PhieuNhapKho(models.Model):
-    """Warehouse import receipt (Bảng 57 - PhieuNhapKho, UC-4.1 to UC-4.11)."""
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Bản nháp"
@@ -135,7 +133,6 @@ class PhieuNhapKho(models.Model):
 
 
 class ChiTietPhieuNhapKho(models.Model):
-    """Line item for a warehouse import receipt (Bảng 58 - ChiTietPhieuNhapKho)."""
 
     phieu_nhap_kho = models.ForeignKey(
         PhieuNhapKho,

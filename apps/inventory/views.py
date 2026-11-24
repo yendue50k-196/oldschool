@@ -9,7 +9,6 @@ from apps.inventory.models import TonKho
 
 @login_required
 def api_variant_stock_view(request):
-    """Return current stock and price for a variant at a branch."""
     variant_id = request.GET.get("variant_id")
     branch = get_effective_branch(request, allow_all_for_admin=False)
     if not variant_id or not str(variant_id).isdigit():
@@ -35,7 +34,6 @@ def api_variant_stock_view(request):
 
 @login_required
 def download_excel_template_view(request, template_type: str):
-    """Download ready-to-use .xlsx templates for Import, Outbound, or Stocktake."""
     sample_variants = list(
         BienThe.objects.select_related("san_pham").filter(
             trang_thai="ACTIVE",
@@ -54,6 +52,18 @@ def download_excel_template_view(request, template_type: str):
             sheet_title="MauNhapKho",
             title_banner="MẪU FILE EXCEL NHẬP KHO - OLD SCHOOL",
             subtitle="Điền Mã SKU, Số lượng (>0), Đơn giá nhập (>=0), Chiết khấu (VNĐ).",
+            headers=headers,
+            rows=rows,
+        )
+
+    if template_type == "restock-request":
+        headers = ["Mã SKU", "Số lượng đề nghị"]
+        rows = [[variant.ma_sku, 10] for variant in sample_variants] or [["SP001-DEN-M", 10]]
+        return build_excel_response(
+            filename="mau_de_nghi_nhap_hang_oldschool.xlsx",
+            sheet_title="DeNghiNhapHang",
+            title_banner="MẪU FILE EXCEL ĐỀ NGHỊ NHẬP HÀNG - OLD SCHOOL",
+            subtitle="Điền Mã SKU đang hoạt động và Số lượng đề nghị (số nguyên > 0).",
             headers=headers,
             rows=rows,
         )

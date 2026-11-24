@@ -5,6 +5,12 @@ app_name = "purchasing"
 
 urlpatterns = [
     path("", views.import_list_view, name="import_list"),
+    path("stock-restock-request/", views.stock_restock_request_view, name="stock_restock_request"),
+    path(
+        "stock-restock-request/<int:notification_id>/detail/",
+        views.stock_restock_request_detail_view,
+        name="stock_restock_request_detail",
+    ),
     path("create/", views.import_create_view, name="import_create"),
     path("<int:receipt_id>/", views.import_detail_view, name="import_detail"),
     path("<int:receipt_id>/edit/", views.import_update_view, name="import_update"),

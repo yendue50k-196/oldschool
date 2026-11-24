@@ -15,7 +15,6 @@ LOCKOUT_MINUTES = 15
 
 
 def login_view(request):
-    """Handle UC-1: Đăng nhập with role resolution and temporary lockout on repeated failures."""
     if request.user.is_authenticated:
         return redirect("catalog:product_list")
 
@@ -92,7 +91,6 @@ def login_view(request):
 
 @login_required
 def logout_view(request):
-    """Handle UC-2: Đăng xuất with confirmation support."""
     if request.method == "POST":
         logout(request)
         messages.info(request, "Bạn đã đăng xuất khỏi hệ thống an toàn.")
@@ -102,7 +100,6 @@ def logout_view(request):
 
 @login_required
 def switch_branch_view(request):
-    """Allow ADMIN to switch branch context in the header selector; block non-admins."""
     if request.method != "POST":
         return redirect("catalog:product_list")
 
@@ -131,7 +128,6 @@ def switch_branch_view(request):
 
 
 def custom_permission_denied_view(request, exception=None):
-    """Render a clear Vietnamese 403 Access Denied screen."""
     message = str(exception) if exception else "Bạn không có quyền truy cập vào chức năng hoặc dữ liệu của cơ sở này."
     return render(
         request,

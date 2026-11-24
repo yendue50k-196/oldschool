@@ -1,4 +1,3 @@
-"""Selectors for Stocktake Records (UC-6.4 to UC-6.7)."""
 from django.db.models import Q, QuerySet
 from apps.accounts.models import User
 from apps.accounts.permissions import scope_queryset_by_branch

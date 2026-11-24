@@ -1,4 +1,3 @@
-"""Forms for Warehouse Import Receipts & Supplier Creation."""
 from django import forms
 from apps.purchasing.models import NhaCungCap, PhieuNhapKho
 

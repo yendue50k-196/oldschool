@@ -1,4 +1,3 @@
-"""Views for Interbranch Transfers (UC-5.3)."""
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render

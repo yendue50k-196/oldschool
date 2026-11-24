@@ -189,11 +189,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-if ($Branches -eq 3) {
-    & $VenvPython manage.py seed_oldschool_3b
-} else {
-    & $VenvPython manage.py seed_oldschool
-}
+& $VenvPython manage.py seed_oldschool --branches $Branches
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[LOI] Khong the khoi tao du lieu mau." -ForegroundColor Red
     exit 1

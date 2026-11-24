@@ -1,13 +1,3 @@
-"""
-Management command `seed_oldschool` (Mục 16 of System.md).
-Idempotently seeds:
-- 2 branches by default (CS1 Kho tổng, CS2) or 3 branches with --branches=3
-- 5 role-based user accounts by default (Admin, 2 Branch Managers, 2 Sales Staff) or 7 accounts with 3 branches
-- 3 Suppliers (NCC001, NCC002, NCC003)
-- 6 Fashion Products (SP001..SP006) with 14 SKU Variants across colors & sizes
-- Opening stock balances covering IN_STOCK, LOW_STOCK, and OUT_OF_STOCK
-- Sample Import Receipts, Sales Outbound Requests & Receipts, Interbranch Transfers, Stocktakes, and Excel files
-"""
 from decimal import Decimal
 from pathlib import Path
 import openpyxl
@@ -257,6 +247,14 @@ class Command(BaseCommand):
         ]
 
         variants_map = {}
+        sample_images = {
+            "SP001": "products/ao bomber.jpg",
+            "SP002": "products/ao so mi.png",
+            "SP003": "products/quan.jpg",
+            "SP004": "products/chan vay.jpg",
+            "SP005": "products/ao thun.webp",
+            "SP006": "products/tui tote.jpg",
+        }
         for p_code, p_name, p_group, p_unit, p_price, v_list in catalog_spec:
             product, _ = SanPham.objects.update_or_create(
                 ma_san_pham=p_code,
@@ -269,6 +267,10 @@ class Command(BaseCommand):
                     "ghi_chu": f"Sản phẩm chủ lực thuộc nhóm {p_group} của chuỗi Old School.",
                 },
             )
+            sample_image = sample_images.get(p_code)
+            if not product.hinh_anh and sample_image and (Path(settings.MEDIA_ROOT) / sample_image).is_file():
+                product.hinh_anh = sample_image
+                product.save(update_fields=["hinh_anh"])
             for sku, color, size, v_price, branch_qtys in v_list:
                 variant, _ = BienThe.objects.update_or_create(
                     ma_sku=sku,

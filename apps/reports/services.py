@@ -1,4 +1,3 @@
-"""Report Export & Snapshot Persistence Services (UC-7.3)."""
 from django.http import HttpResponse
 from django.utils import timezone
 from apps.accounts.models import User
@@ -7,7 +6,6 @@ from apps.reports.models import BaoCao
 
 
 def export_inventory_report_excel(report_data: dict) -> HttpResponse:
-    """Export the filtered inventory & supply chain report to `.xlsx` (UC-7.3)."""
     branch = report_data["effective_branch"]
     branch_label = f"{branch.ma_co_so} - {branch.ten_co_so}" if branch else "Toàn hệ thống (Tất cả cơ sở)"
     start_d = report_data["start_date"].strftime("%d/%m/%Y")
@@ -91,7 +89,6 @@ def export_inventory_report_excel(report_data: dict) -> HttpResponse:
 
 
 def save_report_snapshots(*, actor: User, report_data: dict) -> int:
-    """Persist snapshot rows into `BaoCao` table for historical audit."""
     branch = report_data["effective_branch"]
     scope_code = branch.ma_co_so if branch else "ALL"
     stamp = timezone.now().strftime("%Y%m%d%H%M%S%f")[:17]

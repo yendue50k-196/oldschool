@@ -73,7 +73,6 @@ def _extract_variants_from_post(request, default_price: Decimal) -> list[dict]:
 
 @login_required
 def product_list_view(request):
-    """Handle UC-3, UC-3.1, UC-3.6, UC-3.7, and UC-5.1: Product list, search, filter, stock status."""
     active_branch = get_effective_branch(request, allow_all_for_admin=True)
     ma_hang = request.GET.get("ma_hang", "").strip()
     ten_hang = request.GET.get("ten_hang", "").strip()
@@ -133,7 +132,6 @@ def product_list_view(request):
 
 @login_required
 def product_detail_view(request, pk: int):
-    """Handle UC-3.2: View detailed product info, variants, and branch stock breakdown."""
     product = SanPham.objects.filter(pk=pk).first()
     if not product:
         messages.error(request, "Dữ liệu hàng hóa không tồn tại hoặc đã bị xóa.")
@@ -161,10 +159,9 @@ def product_detail_view(request, pk: int):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER)
 def product_create_view(request):
-    """Handle UC-3.3: Create new product and its SKU variants."""
-    form = ProductForm(request.POST or None, request.FILES or None)
     submitted_variants = []
     if request.method == "POST":
+        form = ProductForm(request.POST, request.FILES)
         p_str = request.POST.get("don_gia_niem_yet") or "0"
         try:
             default_p = Decimal(p_str)
@@ -188,7 +185,7 @@ def product_create_view(request):
                     hinh_anh=cd.get("hinh_anh"),
                     trang_thai=cd["trang_thai"],
                     variants_data=variants_data,
-                    min_threshold=cd.get("muc_ton_toi_thieu") or 5,
+                    min_threshold=cd.get("muc_ton_toi_thieu") if cd.get("muc_ton_toi_thieu") is not None else 5,
                 )
                 messages.success(request, f"Đã lưu thành công mặt hàng {product.ma_san_pham} - {product.ten_hang_hoa}.")
                 return redirect("catalog:product_detail", pk=product.pk)
@@ -197,6 +194,8 @@ def product_create_view(request):
                 messages.error(request, err_msg)
         else:
             messages.error(request, "Dữ liệu nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường thông tin bắt buộc.")
+    else:
+        form = ProductForm()
 
     return render(
         request,
@@ -204,6 +203,7 @@ def product_create_view(request):
         {
             "form": form,
             "is_edit": False,
+            "persisted_image_url": "",
             "existing_variants": submitted_variants,
         },
     )
@@ -211,23 +211,25 @@ def product_create_view(request):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER)
 def product_edit_view(request, pk: int):
-    """Handle UC-3.5: Update existing product and variants."""
     product = SanPham.objects.filter(pk=pk).first()
     if not product:
         messages.error(request, "Dữ liệu hàng hóa không tồn tại hoặc đã bị xóa.")
         return redirect("catalog:product_list")
 
+    # Capture persisted DB image before ProductForm.is_valid() mutates `product` in memory.
+    persisted_image_url = product.hinh_anh.url if product.hinh_anh else ""
+
     first_bal = TonKho.objects.filter(bien_the__san_pham=product).first()
     initial_threshold = first_bal.muc_ton_toi_thieu if first_bal else 5
-    form = ProductForm(
-        request.POST or None,
-        request.FILES or None,
-        instance=product,
-        initial={"muc_ton_toi_thieu": initial_threshold},
-    )
 
     submitted_variants = None
     if request.method == "POST":
+        form = ProductForm(
+            request.POST,
+            request.FILES,
+            instance=product,
+            initial={"muc_ton_toi_thieu": initial_threshold},
+        )
         p_str = request.POST.get("don_gia_niem_yet") or str(product.don_gia_niem_yet)
         try:
             default_p = Decimal(p_str)
@@ -261,6 +263,11 @@ def product_edit_view(request, pk: int):
                 messages.error(request, err_msg)
         else:
             messages.error(request, "Vui lòng kiểm tra lại dữ liệu nhập.")
+    else:
+        form = ProductForm(
+            instance=product,
+            initial={"muc_ton_toi_thieu": initial_threshold},
+        )
 
     if submitted_variants is None:
         existing_variants = list(product.variants.all())
@@ -277,6 +284,7 @@ def product_edit_view(request, pk: int):
             "form": form,
             "product": product,
             "is_edit": True,
+            "persisted_image_url": persisted_image_url,
             "existing_variants": existing_variants,
         },
     )
@@ -284,7 +292,6 @@ def product_edit_view(request, pk: int):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER)
 def product_delete_view(request, pk: int):
-    """Handle UC-3.4: Delete eligible product or reject if it has transactions."""
     if request.method != "POST":
         return redirect("catalog:product_list")
 
@@ -306,7 +313,6 @@ def product_delete_view(request, pk: int):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER)
 def product_toggle_status_view(request, pk: int):
-    """Handle UC-3: Discontinue or reactivate product business status."""
     if request.method != "POST":
         return redirect("catalog:product_detail", pk=pk)
 

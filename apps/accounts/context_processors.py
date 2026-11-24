@@ -1,4 +1,3 @@
-"""Global template context processor for branch selection and notifications."""
 from apps.accounts.permissions import get_effective_branch
 from apps.branches.models import CoSo
 

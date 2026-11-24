@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% block title %}Quản lý Phiếu Nhập Kho | Old School{% endblock %}
+{% block title %}Quản lý Phiếu Nhập Kho | Quản lý Kho và Chuỗi cung ứng Cửa Hàng OldSchool{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
@@ -10,6 +10,11 @@
     </p>
   </div>
   <div class="d-flex gap-2">
+    {% if can_request_restock %}
+    <a href="{% url 'purchasing:stock_restock_request' %}" class="btn btn-sm btn-warning">
+      <i class="bi bi-send me-1"></i>Gửi đề nghị nhập hàng
+    </a>
+    {% endif %}
     <a href="{% url 'purchasing:import_report_export' %}?q={{ filters.q }}&supplier={{ filters.supplier }}&status={{ filters.status }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}" class="btn btn-sm btn-success">
       <i class="bi bi-file-earmark-excel-fill me-1"></i>Xuất báo cáo nhập kho
     </a>

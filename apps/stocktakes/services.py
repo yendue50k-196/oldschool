@@ -1,11 +1,3 @@
-"""
-Stocktake / Inventory Count Services (Phase 6 - UC-6.1 to UC-6.10).
-Enforces:
-- DEC-02: Only ADMIN can approve or reject a stocktake record (`UC-6.10`).
-- DEC-03: Approving a stocktake record updates status and audit metadata (`APPROVED`)
-  without silently overwriting physical stock (`TonKho.so_luong`).
-- System quantity (`so_luong_he_thong`) is captured as an immutable snapshot at stocktake creation/update.
-"""
 from dataclasses import dataclass
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -103,7 +95,6 @@ def create_stocktake(
     muc_dich: str = "Kiểm kê định kỳ cuối ngày",
     ghi_chu: str = "",
 ) -> KiemKe:
-    """Create a new Stocktake Record at the given branch (UC-6.1 to UC-6.3)."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     assert_branch_access(actor, co_so)
 
@@ -171,7 +162,6 @@ def update_stocktake(
     muc_dich: str = "",
     ghi_chu: str = "",
 ) -> KiemKe:
-    """Update an unapproved Stocktake Record (UC-6.4)."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     stocktake = KiemKe.objects.select_for_update().select_related("co_so").get(pk=stocktake.pk)
     assert_branch_access(actor, stocktake.co_so)
@@ -228,7 +218,6 @@ def update_stocktake(
 
 @transaction.atomic
 def delete_stocktake(*, actor: User, stocktake: KiemKe) -> str:
-    """Delete an unapproved Stocktake Record (UC-6.7)."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     stocktake = KiemKe.objects.select_for_update().get(pk=stocktake.pk)
     assert_branch_access(actor, stocktake.co_so)
@@ -241,11 +230,6 @@ def delete_stocktake(*, actor: User, stocktake: KiemKe) -> str:
 
 @transaction.atomic
 def approve_stocktake(*, actor: User, stocktake: KiemKe) -> KiemKe:
-    """
-    Approve a Stocktake Record (UC-6.10 - ADMIN only).
-    Per DEC-03 (and UC-6.10 / Bảng 47), approving a stocktake records administrative
-    verification (`APPROVED`) without silently overwriting physical stock (`TonKho`).
-    """
     assert_roles(actor, User.Role.ADMIN)
     stocktake = KiemKe.objects.select_for_update().select_related("co_so").get(pk=stocktake.pk)
     if stocktake.trang_thai == KiemKe.Status.APPROVED:
@@ -280,7 +264,6 @@ def approve_stocktake(*, actor: User, stocktake: KiemKe) -> KiemKe:
 
 @transaction.atomic
 def reject_stocktake(*, actor: User, stocktake: KiemKe, reason: str = "") -> KiemKe:
-    """Reject a Stocktake Record (UC-6.10 - ADMIN only)."""
     assert_roles(actor, User.Role.ADMIN)
     stocktake = KiemKe.objects.select_for_update().select_related("co_so").get(pk=stocktake.pk)
     if stocktake.trang_thai == KiemKe.Status.APPROVED:

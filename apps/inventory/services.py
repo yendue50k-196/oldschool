@@ -1,7 +1,3 @@
-"""
-Centralized Inventory Mutation & Ledger Service (Mục 6.6, 6.7 & 9 of System.md).
-All stock balance changes MUST pass through this service.
-"""
 from dataclasses import dataclass
 from decimal import Decimal
 from django.core.exceptions import ValidationError
@@ -14,11 +10,11 @@ from apps.notifications.services import sync_low_stock_alert
 
 
 class InsufficientStockError(ValidationError):
-    """Raised when an outbound or transfer operation exceeds available stock."""
+    pass
 
 
 class DuplicateStockEventError(ValidationError):
-    """Raised when an idempotency key has already been processed."""
+    pass
 
 
 @dataclass
@@ -32,7 +28,6 @@ class StockDeltaSpec:
 
 
 def ensure_stock_balance(branch: CoSo, variant: BienThe, min_threshold: int = 5) -> TonKho:
-    """Safely ensure a `TonKho` row exists for `(branch, variant)`, handling concurrent creation."""
     balance = TonKho.objects.filter(co_so=branch, bien_the=variant).first()
     if balance:
         return balance
@@ -49,7 +44,6 @@ def ensure_stock_balance(branch: CoSo, variant: BienThe, min_threshold: int = 5)
 
 
 def ensure_variant_balances_across_branches(variant: BienThe, min_threshold: int = 5) -> list[TonKho]:
-    """Ensure every branch has a stock balance row initialized for a newly created variant."""
     balances = []
     for branch in CoSo.objects.all():
         balances.append(ensure_stock_balance(branch, variant, min_threshold=min_threshold))
@@ -68,10 +62,6 @@ def apply_stock_movements(
     actor,
     effective_at=None,
 ) -> list[StockMovement]:
-    """
-    Atomically lock required `TonKho` rows in deterministic order, validate available stock,
-    apply signed deltas, create immutable `StockMovement` records, and sync low-stock alerts.
-    """
     if not deltas:
         raise ValidationError("Danh sách biến động tồn kho không được để trống.")
 
@@ -164,7 +154,6 @@ def set_opening_stock(
     effective_at=None,
     notes: str = "Khởi tạo tồn kho đầu kỳ",
 ) -> TonKho:
-    """Initialize opening stock balance and record an OPENING ledger movement if quantity > 0."""
     if quantity < 0:
         raise ValidationError("Số lượng tồn đầu kỳ không được âm.")
     balance = ensure_stock_balance(branch, variant, min_threshold=min_threshold)

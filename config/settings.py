@@ -1,6 +1,3 @@
-"""
-Django settings for Old School Inventory & Supply Chain Management System.
-"""
 from pathlib import Path
 import environ
 

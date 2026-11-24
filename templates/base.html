@@ -4,19 +4,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Old School — Hệ thống Quản lý Kho & Chuỗi Cung Ứng{% endblock %}</title>
+  <title>{% block title %}Quản lý Kho và Chuỗi cung ứng Cửa Hàng OldSchool{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="{% static 'css/oldschool.css' %}?v=20261105_v2" rel="stylesheet">
+  <link href="{% static 'css/oldschool.css' %}?v=20261117_catalog_ui" rel="stylesheet">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
-  <!-- Top Brand Navigation (Figma Design) -->
+  <!-- Top Brand Navigation -->
   <nav class="navbar navbar-expand-lg os-navbar sticky-top">
     <div class="container-fluid">
       <a class="os-brand me-4 d-flex align-items-center" href="{% url 'catalog:product_list' %}">
-        <img src="{% static 'images/logo.png' %}" alt="Logo Old School" class="rounded-circle me-2 shadow-sm" style="width: 38px; height: 38px; object-fit: cover; background: #fff; border: 2px solid var(--os-tan-300);">
-        <span class="d-none d-sm-inline">Quản lý Kho & Chuỗi Cung Ứng</span>
+        <img src="{% static 'images/logo.png' %}" alt="Logo Old School" class="os-brand-logo rounded-circle shadow-sm">
+        <span class="os-brand-name">
+          <strong>OLD SCHOOL</strong>
+          <span>Quản lý Kho &amp; Chuỗi cung ứng</span>
+        </span>
       </a>
       <button class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#osMainNav">
         <span class="navbar-toggler-icon"></span>
@@ -87,37 +90,11 @@
           {% endif %}
         </ul>
 
-        <!-- Right Controls: Branch Selector, Notifications, User Profile -->
-        <div class="d-flex align-items-center gap-3">
-          <!-- Branch Selector (Admin can switch; Manager/Staff locked) -->
-          {% if request.user.role == 'ADMIN' %}
-          <form method="post" action="{% url 'accounts:switch_branch' %}" class="d-flex align-items-center m-0">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <div class="input-group input-group-sm">
-              <span class="input-group-text bg-warning-subtle border-0 fw-bold text-dark">
-                <i class="bi bi-geo-alt-fill me-1"></i>Cơ sở:
-              </span>
-              <select name="branch_id" class="form-select form-select-sm fw-semibold" onchange="this.form.submit()">
-                <option value="ALL" {% if not global_active_branch %}selected{% endif %}>Tất cả cơ sở (Toàn chuỗi)</option>
-                {% for b in global_all_branches %}
-                <option value="{{ b.id }}" {% if global_active_branch and global_active_branch.id == b.id %}selected{% endif %}>
-                  {{ b.ma_co_so }} — {{ b.ten_co_so }}
-                </option>
-                {% endfor %}
-              </select>
-            </div>
-          </form>
-          {% else %}
-          <span class="badge bg-light text-dark px-3 py-2 fw-semibold">
-            <i class="bi bi-shop me-1 text-warning-emphasis"></i>
-            {% if request.user.branch %}{{ request.user.branch.ma_co_so }} — {{ request.user.branch.ten_co_so }}{% else %}Chưa gán cơ sở{% endif %}
-          </span>
-          {% endif %}
-
+        <!-- Right Controls: Notifications, User Profile, and Branch -->
+        <div class="os-account-controls">
           <!-- Notification Bell & Dropdown -->
           <div class="dropdown">
-            <a class="btn btn-sm btn-os-tan position-relative" href="#" role="button" data-bs-toggle="dropdown" title="Thông báo & Cảnh báo tồn kho">
+            <a class="btn btn-os-tan os-notification-button position-relative" href="#" role="button" data-bs-toggle="dropdown" title="Thông báo & Cảnh báo tồn kho">
               <i class="bi bi-bell-fill"></i>
               {% if global_unread_notifications_count > 0 %}
               <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -136,7 +113,13 @@
                   <span class="fw-bold small">{{ notif.tieu_de }}</span>
                   {% if not notif.da_doc %}<span class="badge bg-danger rounded-pill">Mới</span>{% endif %}
                 </div>
-                <div class="small text-muted">{{ notif.noi_dung|truncatechars:100 }}</div>
+                <div class="small text-muted">
+                  {% if notif.related_entity_type == 'StockRestockRequest' %}
+                    Đề nghị nhập hàng từ CS1. Nhấn để xem chi tiết.
+                  {% else %}
+                    {{ notif.noi_dung|truncatechars:100 }}
+                  {% endif %}
+                </div>
                 <div class="text-secondary" style="font-size: 0.72rem;">{{ notif.created_at|date:"d/m/Y H:i" }}</div>
               </a>
               {% empty %}
@@ -147,16 +130,33 @@
 
           <!-- User Profile & Logout -->
           <div class="dropdown">
-            <button class="btn btn-sm btn-outline-light dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
-              <i class="bi bi-person-circle"></i>
-              <span class="d-none d-md-inline">{{ request.user.display_name }}</span>
-              <span class="badge bg-warning text-dark">{{ request.user.role_badge_label }}</span>
+            <button class="os-user-menu dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="bi bi-person-circle os-user-icon"></i>
+              <span class="os-user-info">
+                <span class="os-user-name">{{ request.user.display_name }}</span>
+                <span class="badge bg-warning text-dark align-self-start">{{ request.user.role_badge_label }}</span>
+              </span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
               <li class="px-3 py-2 small text-muted border-bottom">
                 Tài khoản: <strong>{{ request.user.username }}</strong><br>
                 Vai trò: <strong>{{ request.user.role_badge_label }}</strong>
               </li>
+              {% if request.user.role == 'ADMIN' %}
+              <li class="px-3 py-2 border-bottom">
+                <label class="small text-muted d-block mb-2">Cơ sở đang xem</label>
+                <form method="post" action="{% url 'accounts:switch_branch' %}" class="m-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <select name="branch_id" class="form-select form-select-sm" aria-label="Chọn cơ sở đang xem" onchange="this.form.submit()">
+                    <option value="ALL" {% if not global_active_branch %}selected{% endif %}>Tất cả cơ sở (Toàn chuỗi)</option>
+                    {% for b in global_all_branches %}
+                    <option value="{{ b.id }}" {% if global_active_branch and global_active_branch.id == b.id %}selected{% endif %}>{{ b.ma_co_so }} — {{ b.ten_co_so }}</option>
+                    {% endfor %}
+                  </select>
+                </form>
+              </li>
+              {% endif %}
               <li>
                 <a class="dropdown-item text-danger fw-semibold" href="{% url 'accounts:logout' %}" data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
                   <i class="bi bi-box-arrow-right me-2"></i>Đăng xuất
@@ -239,7 +239,7 @@
   {% endif %}
 
   <footer class="py-3 px-4 mt-auto border-top text-center small text-muted" style="background-color: var(--os-tan-200);">
-    Hệ thống Quản lý Kho & Chuỗi Cung Ứng Cửa hàng Thời trang <strong>Old School</strong> — Đà Nẵng{% if global_system_branches %} ({% for b in global_system_branches %}{{ b.ma_co_so }} {{ b.ten_co_so }}{% if not forloop.last %} • {% endif %}{% endfor %}){% endif %}
+    Quản lý Kho và Chuỗi cung ứng Cửa Hàng <strong>OldSchool</strong>{% if global_system_branches %} — {% for b in global_system_branches %}{{ b.ma_co_so }} {{ b.ten_co_so }}{% if not forloop.last %} • {% endif %}{% endfor %}{% endif %}
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

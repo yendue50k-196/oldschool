@@ -2,7 +2,6 @@ from django.db import models
 
 
 class ThongBao(models.Model):
-    """Persisted system notification and low-stock alert (Mục 7.7 & UC-5.13)."""
 
     class NotificationType(models.TextChoices):
         IMPORT_SUBMITTED = "IMPORT_SUBMITTED", "Phiếu nhập kho chờ duyệt"

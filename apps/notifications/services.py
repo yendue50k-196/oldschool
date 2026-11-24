@@ -1,4 +1,3 @@
-"""Notification and deduplicated low-stock warning services (Mục 7.7, 14 & UC-5.13)."""
 from django.db.models import Q
 from django.urls import reverse
 from apps.accounts.models import User
@@ -71,6 +70,7 @@ def notify_admins(
     title: str,
     content: str,
     branch=None,
+    variant=None,
     related_entity_type: str = "",
     related_entity_id: int | None = None,
     target_url: str = "",
@@ -82,6 +82,7 @@ def notify_admins(
         title=title,
         content=content,
         branch=branch,
+        variant=variant,
         related_entity_type=related_entity_type,
         related_entity_id=related_entity_id,
         target_url=target_url,
@@ -131,13 +132,6 @@ def notify_branch_managers(
 
 
 def sync_low_stock_alert(ton_kho: TonKho) -> None:
-    """
-    Evaluate `ton_kho` against `muc_ton_toi_thieu` (UC-5.13 & Section 14).
-    - If `so_luong <= muc_ton_toi_thieu`: create or update an unresolved LOW_STOCK_ALERT
-      for `(co_so, bien_the)` without creating duplicate unresolved warnings.
-    - If `so_luong > muc_ton_toi_thieu`: mark any open alerts for `(co_so, bien_the)` as resolved.
-    - If the product or variant is discontinued / inactive: automatically resolve any open alerts.
-    """
     variant = ton_kho.bien_the
     product = variant.san_pham
     open_alerts = ThongBao.objects.filter(

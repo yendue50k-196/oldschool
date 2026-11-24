@@ -1,4 +1,3 @@
-"""Selectors for Warehouse Import Receipts and Suppliers (UC-4.3 to UC-4.6, UC-4.11)."""
 from decimal import Decimal
 from django.db.models import Q, QuerySet
 from apps.purchasing.models import NhaCungCap, PhieuNhapKho
@@ -38,7 +37,6 @@ def get_filtered_import_receipts(
 
 
 def get_import_activity_summary(receipts: QuerySet[PhieuNhapKho] | list[PhieuNhapKho]) -> dict:
-    """Compute period import activity summary metrics for UC-4.11."""
     receipt_list = list(receipts)
     total_count = len(receipt_list)
     approved_count = 0

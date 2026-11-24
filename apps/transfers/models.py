@@ -5,7 +5,6 @@ from django.utils import timezone
 
 
 class PhieuDieuChuyen(models.Model):
-    """Interbranch Transfer Order (Bảng 61 - PhieuDieuChuyen, UC-5.3)."""
 
     class Status(models.TextChoices):
         REQUESTED = "REQUESTED", "Chờ cơ sở xuất xác nhận"
@@ -91,7 +90,6 @@ class PhieuDieuChuyen(models.Model):
 
 
 class ChiTietPhieuDieuChuyen(models.Model):
-    """Line item for Interbranch Transfer (Bảng 62 - ChiTietPhieuDieuChuyen)."""
 
     phieu_dieu_chuyen = models.ForeignKey(
         PhieuDieuChuyen,
@@ -123,7 +121,6 @@ class ChiTietPhieuDieuChuyen(models.Model):
 
     @property
     def so_luong(self) -> int:
-        """Compatibility alias returning dispatched or requested quantity."""
         return self.so_luong_xuat if self.so_luong_xuat > 0 else self.so_luong_yeu_cau
 
     @property

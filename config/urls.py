@@ -1,4 +1,3 @@
-"""Root URL configuration for Old School Inventory Management System."""
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin

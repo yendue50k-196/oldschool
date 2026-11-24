@@ -1,15 +1,19 @@
-"""Views for Warehouse Import Management (UC-4.1 to UC-4.11)."""
 from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 from apps.accounts.models import User
 from apps.accounts.permissions import assert_branch_access, assert_can_manage_imports, role_required
 from apps.branches.models import CoSo
 from apps.catalog.models import BienThe
-from apps.inventory.excel import build_excel_response, parse_import_excel
+from apps.inventory.excel import (
+    build_excel_response,
+    parse_import_excel,
+    parse_restock_request_excel,
+)
+from apps.inventory.models import TonKho
 from apps.purchasing.forms import ImportReceiptHeaderForm, SupplierForm
 from apps.purchasing.models import NhaCungCap, PhieuNhapKho
 from apps.purchasing.selectors import (
@@ -27,6 +31,8 @@ from apps.purchasing.services import (
     delete_import_receipt,
     generate_next_import_code,
     return_import_receipt,
+    acknowledge_stock_restock_request,
+    send_stock_restock_request,
     update_import_receipt,
 )
 
@@ -127,7 +133,112 @@ def import_list_view(request):
                 "date_from": date_from,
                 "date_to": date_to,
             },
+            "can_request_restock": (
+                request.user.role == User.Role.MANAGER
+                and request.user.branch
+                and request.user.branch.ma_co_so.upper() == "CS1"
+            ),
         },
+    )
+
+
+def _stock_restock_request_context(rows):
+    variants = list(
+        BienThe.objects.select_related("san_pham")
+        .filter(trang_thai=BienThe.Status.ACTIVE, san_pham__trang_thai="ACTIVE")
+        .order_by("ma_sku")
+    )
+    branch = CoSo.objects.filter(ma_co_so__iexact="CS1").first()
+    stocks = {}
+    if branch:
+        stocks = dict(
+            TonKho.objects.filter(co_so=branch, bien_the__in=variants).values_list("bien_the_id", "so_luong")
+        )
+    for variant in variants:
+        variant.request_stock = stocks.get(variant.id, 0)
+    return {"active_variants": variants, "initial_rows": rows}
+
+
+@role_required(User.Role.MANAGER)
+@require_http_methods(["GET", "POST"])
+def stock_restock_request_view(request):
+    if not request.user.branch or request.user.branch.ma_co_so.upper() != "CS1":
+        raise PermissionDenied("Chỉ Quản lý kho CS1 mới được gửi đề nghị nhập hàng.")
+
+    if request.method == "POST":
+        reason = request.POST.get("reason", "")
+        if request.POST.get("form_action") == "upload_excel":
+            excel_result = parse_restock_request_excel(request.FILES.get("excel_file"))
+            if excel_result["valid"]:
+                initial_rows = [
+                    {
+                        "variant_id": str(row["variant_id"]),
+                        "quantity": row["quantity"],
+                    }
+                    for row in excel_result["rows"]
+                ]
+                messages.success(
+                    request,
+                    f"Đã đọc {len(initial_rows)} SKU từ Excel. Vui lòng kiểm tra và bấm Gửi đến ADMIN.",
+                )
+            else:
+                initial_rows = [{"variant_id": "", "quantity": ""}]
+                for error in excel_result["errors"][:5]:
+                    messages.error(request, error)
+            return render(
+                request,
+                "purchasing/stock_restock_request.html",
+                {**_stock_restock_request_context(initial_rows), "reason": reason},
+            )
+
+        variant_ids = request.POST.getlist("variant_id")
+        quantities = request.POST.getlist("quantity")
+        row_count = max(len(variant_ids), len(quantities))
+        rows = [
+            (
+                variant_ids[index] if index < len(variant_ids) else "",
+                quantities[index] if index < len(quantities) else "",
+            )
+            for index in range(row_count)
+        ]
+        initial_rows = [
+            {"variant_id": variant_id, "quantity": quantity}
+            for variant_id, quantity in rows
+        ] or [{"variant_id": "", "quantity": ""}]
+        try:
+            count = send_stock_restock_request(
+                actor=request.user,
+                rows=rows,
+                reason=reason,
+            )
+            messages.success(request, f"Đã gửi đề nghị nhập hàng cho {count} SKU đến ADMIN.")
+            return redirect("purchasing:import_list")
+        except ValidationError as exc:
+            for error in (exc.messages if hasattr(exc, "messages") else [str(exc)]):
+                messages.error(request, error)
+    else:
+        initial_rows = [{"variant_id": "", "quantity": ""}]
+        reason = ""
+
+    return render(
+        request,
+        "purchasing/stock_restock_request.html",
+        {**_stock_restock_request_context(initial_rows), "reason": reason},
+    )
+
+
+@role_required(User.Role.ADMIN)
+def stock_restock_request_detail_view(request, notification_id: int):
+    request_data = acknowledge_stock_restock_request(
+        notification_id=notification_id,
+        admin=request.user,
+    )
+    if request_data is None:
+        raise PermissionDenied("Bạn không có quyền xem đề nghị nhập hàng này.")
+    return render(
+        request,
+        "purchasing/stock_restock_request_detail.html",
+        {"request_data": request_data},
     )
 
 
@@ -372,7 +483,6 @@ def import_export_excel_view(request, receipt_id: int):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER)
 def import_report_export_view(request):
-    """Export period Warehouse Import Activity Report to Excel (.xlsx) (UC-4.10 & UC-4.11)."""
     assert_can_manage_imports(request.user)
     search_query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "").strip()
@@ -481,7 +591,6 @@ def supplier_list_create_view(request):
 @role_required(User.Role.ADMIN, User.Role.MANAGER)
 @require_POST
 def import_propose_return_view(request, receipt_id: int):
-    """Manager reports defective goods and requests returning to supplier."""
     receipt = get_object_or_404(PhieuNhapKho.objects.select_related("co_so_nhan"), pk=receipt_id)
     assert_branch_access(request.user, receipt.co_so_nhan)
     reason = request.POST.get("ly_do_loi_ncc", "").strip()
@@ -497,7 +606,6 @@ def import_propose_return_view(request, receipt_id: int):
 @role_required(User.Role.ADMIN)
 @require_POST
 def import_confirm_supplier_return_view(request, receipt_id: int):
-    """Admin confirms returning defective goods to supplier."""
     receipt = get_object_or_404(PhieuNhapKho.objects.select_related("co_so_nhan"), pk=receipt_id)
     admin_note = request.POST.get("ghi_chu_chu", "").strip()
     try:

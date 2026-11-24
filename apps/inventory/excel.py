@@ -1,11 +1,3 @@
-"""
-Reusable Excel (.xlsx) upload parser, validator, preview generator, and safe exporter (Mục 12).
-Supports:
-- Import receipt lines (UC-4.1)
-- Sales outbound lines (UC-5.2)
-- Stocktake count lines (UC-6.3)
-- Safe spreadsheet export with formula-injection protection (UC-4.10, UC-7.3)
-"""
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import unicodedata
@@ -21,14 +13,12 @@ FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 def sanitize_excel_value(val):
-    """Prevent spreadsheet formula injection when exporting untrusted text to Excel."""
     if isinstance(val, str) and val.startswith(FORMULA_PREFIXES):
         return f"'{val}"
     return val
 
 
 def validate_uploaded_xlsx(uploaded_file) -> tuple[openpyxl.Workbook | None, str | None]:
-    """Validate file extension, size limit, and openpyxl parseability."""
     if not uploaded_file:
         return None, "Vui lòng chọn một file Excel (.xlsx) để tải lên."
     filename = getattr(uploaded_file, "name", "") or ""
@@ -62,6 +52,7 @@ def _normalize_header(val) -> str:
         "ma_hang": "ma_sku",
         "số lượng": "so_luong",
         "so_luong": "so_luong",
+        "số lượng đề nghị": "so_luong",
         "số lượng nhập": "so_luong",
         "số lượng xuất": "so_luong",
         "số lượng thực tế": "so_luong_thuc_te",
@@ -82,7 +73,6 @@ def _normalize_header(val) -> str:
 
 
 def _find_header_row(raw_rows, required_sets):
-    """Find a complete header in the preamble, retaining its physical row offset."""
     for row_index, row in enumerate(raw_rows[:20]):
         headers = [_normalize_header(cell) for cell in row]
         required = next((columns for columns in required_sets if columns <= set(headers)), None)
@@ -120,11 +110,6 @@ def _resolve_variant(code: str) -> BienThe | None:
 
 
 def parse_import_excel(uploaded_file) -> dict:
-    """
-    Parse and validate an Excel file for Warehouse Import (UC-4.1).
-    Required columns: `ma_sku` (or `Mã SKU`/`Mã hàng`), `so_luong`, `don_gia`.
-    Optional: `chiet_khau`, `ghi_chu`.
-    """
     wb, err = validate_uploaded_xlsx(uploaded_file)
     if err:
         return {"valid": False, "file_error": err, "rows": [], "errors": [err]}
@@ -178,7 +163,7 @@ def parse_import_excel(uploaded_file) -> dict:
             unit_price = Decimal(str(price_raw))
             if unit_price < 0:
                 row_errors.append("Đơn giá nhập không được âm.")
-        except (InvalidOperation, ValueError, TypeError):
+        except (InvalidOperation, ValueError, TypeError, OverflowError):
             row_errors.append("Đơn giá nhập không hợp lệ.")
 
         discount = Decimal("0")
@@ -225,12 +210,76 @@ def parse_import_excel(uploaded_file) -> dict:
     }
 
 
+def parse_restock_request_excel(uploaded_file) -> dict:
+    wb, err = validate_uploaded_xlsx(uploaded_file)
+    if err:
+        return {"valid": False, "file_error": err, "rows": [], "errors": [err]}
+
+    raw_rows = list(wb.active.iter_rows(values_only=True))
+    if not raw_rows:
+        message = "File Excel trống."
+        return {"valid": False, "file_error": message, "rows": [], "errors": [message]}
+
+    col_idx, header_row, header_error = _find_header_row(
+        raw_rows, [{"ma_sku", "so_luong"}]
+    )
+    if header_error or not col_idx:
+        message = header_error or "File thiếu cột bắt buộc. Cần có: Mã SKU và Số lượng đề nghị."
+        return {"valid": False, "file_error": message, "rows": [], "errors": [message]}
+
+    parsed_rows = []
+    errors = []
+    seen_skus = set()
+    for row_number, row in enumerate(raw_rows[header_row:], start=header_row + 1):
+        if not row or all(cell is None or str(cell).strip() == "" for cell in row):
+            continue
+
+        sku = str(row[col_idx["ma_sku"]] or "").strip()
+        quantity_raw = row[col_idx["so_luong"]] if col_idx["so_luong"] < len(row) else None
+        row_errors = []
+        variant = _resolve_variant(sku) if sku else None
+        if not sku:
+            row_errors.append("Thiếu Mã SKU.")
+        elif not variant:
+            row_errors.append(f"Mã SKU '{sku}' không tồn tại hoặc đã ngừng hoạt động.")
+        elif variant.ma_sku in seen_skus:
+            row_errors.append(f"Mã SKU '{variant.ma_sku}' bị trùng lặp trong file.")
+        else:
+            seen_skus.add(variant.ma_sku)
+
+        quantity = 0
+        try:
+            quantity_number = Decimal(str(quantity_raw))
+            if quantity_number != quantity_number.to_integral_value() or quantity_number <= 0:
+                raise ValueError
+            quantity = int(quantity_number)
+        except (InvalidOperation, ValueError, TypeError):
+            row_errors.append("Số lượng đề nghị phải là số nguyên lớn hơn 0.")
+
+        if row_errors:
+            errors.append(f"Dòng {row_number}: " + " ".join(row_errors))
+        parsed_rows.append(
+            {
+                "row_number": row_number,
+                "variant_id": variant.id if variant else None,
+                "sku": variant.ma_sku if variant else sku,
+                "quantity": quantity,
+                "errors": row_errors,
+            }
+        )
+
+    if not parsed_rows:
+        errors.append("File Excel không có dòng SKU nào.")
+
+    return {
+        "valid": len(errors) == 0 and len(parsed_rows) > 0,
+        "file_error": None,
+        "rows": parsed_rows,
+        "errors": errors,
+    }
+
+
 def parse_outbound_excel(uploaded_file, branch: CoSo) -> dict:
-    """
-    Parse and validate an Excel file for Sales Outbound (UC-5.2).
-    Required columns: `ma_sku` (or `Mã SKU`/`Mã hàng`), `so_luong`.
-    Optional: `don_gia`, `ghi_chu`.
-    """
     wb, err = validate_uploaded_xlsx(uploaded_file)
     if err:
         return {"valid": False, "file_error": err, "rows": [], "errors": [err]}
@@ -326,11 +375,6 @@ def parse_outbound_excel(uploaded_file, branch: CoSo) -> dict:
 
 
 def parse_stocktake_excel(uploaded_file, branch: CoSo) -> dict:
-    """
-    Parse and validate an Excel file for Stocktake / Inventory Count (UC-6.3).
-    Required columns: `ma_sku` (or `Mã hàng`), `so_luong_thuc_te` (or `Số lượng thực tế` / `Số lượng`).
-    Optional: `xu_ly`, `ghi_chu`.
-    """
     wb, err = validate_uploaded_xlsx(uploaded_file)
     if err:
         return {"valid": False, "file_error": err, "rows": [], "errors": [err]}
@@ -421,7 +465,6 @@ def parse_stocktake_excel(uploaded_file, branch: CoSo) -> dict:
 
 
 def build_excel_response(*, filename: str, sheet_title: str, title_banner: str, subtitle: str, headers: list[str], rows: list[list]) -> HttpResponse:
-    """Create a styled `.xlsx` download response with formula-injection protection."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = sheet_title[:31]

@@ -3,7 +3,6 @@ from django.db import models
 
 
 class CoSo(models.Model):
-    """Represent a physical store branch or central warehouse (Bảng 63 - CoSo)."""
 
     ma_co_so = models.CharField(
         "Mã cơ sở",
@@ -33,7 +32,6 @@ class CoSo(models.Model):
 
     @classmethod
     def get_central_warehouse(cls):
-        """Return the central warehouse branch without hardcoding primary keys."""
         cw = cls.objects.filter(is_central_warehouse=True).first()
         if cw:
             return cw

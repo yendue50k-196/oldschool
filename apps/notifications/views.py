@@ -1,11 +1,18 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from apps.accounts.permissions import get_effective_branch
+from apps.accounts.models import User
 from apps.inventory.models import TonKho
 from apps.notifications.models import ThongBao
+from apps.purchasing.services import (
+    RESTOCK_REQUEST_ENTITY,
+    acknowledge_stock_restock_request,
+)
 
 
 def _get_user_notifications_queryset(user, active_branch=None):
@@ -13,14 +20,17 @@ def _get_user_notifications_queryset(user, active_branch=None):
     if user.is_business_admin:
         qs = qs.filter(Q(nguoi_nhan=user) | Q(nguoi_nhan__isnull=True))
         if active_branch:
-            qs = qs.filter(Q(co_so=active_branch) | Q(co_so__isnull=True))
+            qs = qs.filter(
+                Q(co_so=active_branch)
+                | Q(co_so__isnull=True)
+                | Q(related_entity_type=RESTOCK_REQUEST_ENTITY)
+            )
         return qs
     return qs.filter(Q(nguoi_nhan=user) | (Q(nguoi_nhan__isnull=True, co_so=user.branch)))
 
 
 @login_required
 def notification_list_view(request):
-    """Display notifications and low-stock warning overview (UC-5.13 & Section C.II)."""
     active_branch = get_effective_branch(request, allow_all_for_admin=True)
     qs = _get_user_notifications_queryset(request.user, active_branch=active_branch)
 
@@ -64,6 +74,10 @@ def mark_notification_read_view(request, pk: int):
     active_branch = get_effective_branch(request, allow_all_for_admin=True)
     qs = _get_user_notifications_queryset(request.user, active_branch=active_branch)
     notif = get_object_or_404(qs, pk=pk)
+    if notif.related_entity_type == RESTOCK_REQUEST_ENTITY:
+        if request.user.role != User.Role.ADMIN:
+            raise PermissionDenied("Chỉ ADMIN mới được xem chi tiết đề nghị nhập hàng.")
+        return redirect("purchasing:stock_restock_request_detail", notification_id=notif.pk)
     if not notif.da_doc:
         notif.da_doc = True
         notif.save(update_fields=["da_doc"])
@@ -79,6 +93,18 @@ def mark_all_read_view(request):
     if request.method == "POST":
         active_branch = get_effective_branch(request, allow_all_for_admin=True)
         qs = _get_user_notifications_queryset(request.user, active_branch=active_branch)
+        if request.user.role == User.Role.ADMIN:
+            restock_notification_ids = list(
+                qs.filter(
+                    da_doc=False,
+                    related_entity_type=RESTOCK_REQUEST_ENTITY,
+                ).values_list("id", flat=True)
+            )
+            for notification_id in restock_notification_ids:
+                acknowledge_stock_restock_request(
+                    notification_id=notification_id,
+                    admin=request.user,
+                )
         qs.filter(da_doc=False).update(da_doc=True)
         messages.success(request, "Đã đánh dấu tất cả thông báo là đã đọc.")
     referer = request.META.get("HTTP_REFERER")

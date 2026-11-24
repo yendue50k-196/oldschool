@@ -6,10 +6,6 @@ from django.utils import timezone
 
 
 class YeuCauXuatHang(models.Model):
-    """
-    Lightweight Sales Outbound Request created by STAFF (Nhân viên bán hàng)
-    per Proposed Workflow Hình 5 before Manager prepares the actual Outbound Receipt.
-    """
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Chờ quản lý xử lý"
@@ -99,7 +95,6 @@ class ChiTietYeuCauXuatHang(models.Model):
 
 
 class PhieuXuatHangBan(models.Model):
-    """Sales Outbound Receipt (Bảng 59 - PhieuXuatHangBan, UC-5.4 to UC-5.12)."""
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Chờ ghi nhận"
@@ -200,7 +195,6 @@ class PhieuXuatHangBan(models.Model):
 
 
 class ChiTietPhieuXuatHangBan(models.Model):
-    """Line item for Sales Outbound Receipt (Bảng 60 - ChiTietPhieuXuatHangBan)."""
 
     phieu_xuat_hang_ban = models.ForeignKey(
         PhieuXuatHangBan,

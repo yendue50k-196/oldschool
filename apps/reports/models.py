@@ -4,7 +4,6 @@ from django.utils import timezone
 
 
 class BaoCao(models.Model):
-    """Saved Report Snapshot entity (Bảng 66 - BaoCao, extended with branch & period scope)."""
 
     ma_bao_cao = models.CharField("Mã báo cáo", max_length=60, unique=True, db_index=True)
     co_so = models.ForeignKey(

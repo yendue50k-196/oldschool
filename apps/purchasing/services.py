@@ -1,9 +1,7 @@
-"""
-Warehouse Import & Supplier Management Services (Phase 3 - UC-4.1 to UC-4.11).
-Enforces DEC-01: Stock increases ONLY when ADMIN approves an import receipt (UC-4.9).
-"""
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
+import json
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.urls import reverse
@@ -12,11 +10,14 @@ from apps.accounts.models import User
 from apps.accounts.permissions import assert_can_manage_imports, assert_roles
 from apps.branches.models import CoSo
 from apps.catalog.models import BienThe
-from apps.inventory.models import StockMovement
+from apps.inventory.models import StockMovement, TonKho
 from apps.inventory.services import StockDeltaSpec, apply_stock_movements
 from apps.notifications.models import ThongBao
-from apps.notifications.services import notify_admins, notify_branch_managers
+from apps.notifications.services import notify_admins, notify_branch_managers, notify_users
 from apps.purchasing.models import ChiTietPhieuNhapKho, NhaCungCap, PhieuNhapKho
+
+RESTOCK_REQUEST_ENTITY = "StockRestockRequest"
+RESTOCK_REQUEST_ACK_ENTITY = "StockRestockRequestAck"
 
 
 @dataclass
@@ -26,6 +27,203 @@ class ImportLineSpec:
     don_gia: Decimal
     chiet_khau: Decimal = Decimal("0")
     ghi_chu: str = ""
+
+
+@transaction.atomic
+def send_stock_restock_request(
+    *,
+    actor: User,
+    rows: list[tuple[str, str]],
+    reason: str,
+) -> int:
+    actor = User.objects.select_for_update().select_related("branch").get(pk=actor.pk)
+    assert_roles(actor, User.Role.MANAGER)
+    if not actor.branch or actor.branch.ma_co_so.upper() != "CS1":
+        raise PermissionDenied("Chỉ Quản lý kho CS1 mới được gửi đề nghị nhập hàng.")
+
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Vui lòng nhập lý do đề nghị.")
+    if len(reason) > 1000:
+        raise ValidationError("Lý do đề nghị không được vượt quá 1000 ký tự.")
+
+    selected_rows = []
+    seen_variant_ids = set()
+    for index, (raw_variant_id, raw_quantity) in enumerate(rows, start=1):
+        raw_variant_id = str(raw_variant_id or "").strip()
+        raw_quantity = str(raw_quantity or "").strip()
+        if not raw_variant_id and not raw_quantity:
+            continue
+        if not raw_variant_id or not raw_quantity:
+            raise ValidationError(f"Dòng {index}: Vui lòng chọn SKU và nhập số lượng đề nghị.")
+        if not raw_variant_id.isascii() or not raw_variant_id.isdecimal():
+            raise ValidationError(f"Dòng {index}: SKU không hợp lệ.")
+        if not raw_quantity.isascii() or not raw_quantity.isdecimal():
+            raise ValidationError(f"Dòng {index}: Số lượng phải là số nguyên lớn hơn 0.")
+
+        variant_id = int(raw_variant_id)
+        quantity = int(raw_quantity)
+        if quantity <= 0:
+            raise ValidationError(f"Dòng {index}: Số lượng phải lớn hơn 0.")
+        if variant_id in seen_variant_ids:
+            raise ValidationError(f"Dòng {index}: Không được chọn trùng SKU.")
+        seen_variant_ids.add(variant_id)
+        selected_rows.append((variant_id, quantity))
+
+    if not selected_rows:
+        raise ValidationError("Vui lòng chọn ít nhất một SKU để đề nghị.")
+
+    variants = {
+        variant.id: variant
+        for variant in BienThe.objects.select_related("san_pham").filter(
+            id__in=[variant_id for variant_id, _ in selected_rows],
+            trang_thai=BienThe.Status.ACTIVE,
+            san_pham__trang_thai="ACTIVE",
+        )
+    }
+    if len(variants) != len(selected_rows):
+        raise ValidationError("Có SKU không tồn tại hoặc đã ngừng hoạt động. Vui lòng kiểm tra lại.")
+
+    branch = actor.branch
+    balances = {
+        balance.bien_the_id: balance.so_luong
+        for balance in TonKho.objects.select_for_update().filter(
+            co_so=branch,
+            bien_the_id__in=variants,
+        )
+    }
+    now = timezone.now()
+    recent_cutoff = now - timedelta(minutes=5)
+    recent_requests = ThongBao.objects.filter(
+        loai_thong_bao=ThongBao.NotificationType.SYSTEM,
+        related_entity_type=RESTOCK_REQUEST_ENTITY,
+        created_at__gte=recent_cutoff,
+    ).only("noi_dung")
+    recently_requested_variant_ids = set()
+    for notification in recent_requests:
+        try:
+            request_data = json.loads(notification.noi_dung)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if request_data.get("sender_id") == actor.id:
+            recently_requested_variant_ids.update(item["variant_id"] for item in request_data.get("items", []))
+    for variant_id, _ in selected_rows:
+        if variant_id in recently_requested_variant_ids:
+            raise ValidationError(
+                f"Bạn đã gửi đề nghị cho SKU {variants[variant_id].ma_sku} trong vòng 5 phút."
+            )
+
+    request_data = {
+        "sender_id": actor.id,
+        "sender_name": actor.display_name,
+        "sender_username": actor.username,
+        "branch_id": branch.id,
+        "branch_name": branch.ten_co_so,
+        "reason": reason,
+        "sent_at": now.isoformat(),
+        "items": [
+            {
+                "variant_id": variant_id,
+                "sku": variants[variant_id].ma_sku,
+                "product_name": variants[variant_id].san_pham.ten_hang_hoa,
+                "color": variants[variant_id].mau_sac,
+                "size": variants[variant_id].kich_co,
+                "stock": balances.get(variant_id, 0),
+                "quantity": quantity,
+            }
+            for variant_id, quantity in selected_rows
+        ],
+    }
+    notifications = notify_admins(
+        notification_type=ThongBao.NotificationType.SYSTEM,
+        title=f"Đề nghị nhập hàng CS1 ({len(selected_rows)} SKU)",
+        content=json.dumps(request_data, ensure_ascii=False),
+        branch=branch,
+        related_entity_type=RESTOCK_REQUEST_ENTITY,
+        related_entity_id=actor.id,
+    )
+    if not notifications:
+        raise ValidationError("Không tìm thấy tài khoản ADMIN đang hoạt động để nhận đề nghị.")
+
+    request_id = notifications[0].id
+    detail_url = reverse("purchasing:stock_restock_request_detail", args=[request_id])
+    ThongBao.objects.filter(pk__in=[notification.pk for notification in notifications]).update(
+        related_entity_id=request_id,
+        target_url=detail_url,
+    )
+
+    return len(selected_rows)
+
+
+@transaction.atomic
+def acknowledge_stock_restock_request(*, notification_id: int, admin: User) -> dict | None:
+    assert_roles(admin, User.Role.ADMIN)
+    notification = ThongBao.objects.filter(
+        pk=notification_id,
+        nguoi_nhan=admin,
+        loai_thong_bao=ThongBao.NotificationType.SYSTEM,
+        related_entity_type=RESTOCK_REQUEST_ENTITY,
+    ).first()
+    if not notification:
+        return None
+
+    request_id = notification.related_entity_id
+    if not request_id:
+        raise ValidationError("Thông báo đề nghị nhập hàng không hợp lệ.")
+    canonical_notification = (
+        ThongBao.objects.select_for_update()
+        .filter(
+            pk=request_id,
+            loai_thong_bao=ThongBao.NotificationType.SYSTEM,
+            related_entity_type=RESTOCK_REQUEST_ENTITY,
+            related_entity_id=request_id,
+        )
+        .first()
+    )
+    if not canonical_notification:
+        raise ValidationError("Không tìm thấy lô đề nghị nhập hàng.")
+
+    try:
+        request_data = json.loads(canonical_notification.noi_dung)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValidationError("Dữ liệu đề nghị nhập hàng không hợp lệ.") from exc
+
+    if not notification.da_doc:
+        ThongBao.objects.filter(
+            loai_thong_bao=ThongBao.NotificationType.SYSTEM,
+            related_entity_type=RESTOCK_REQUEST_ENTITY,
+            related_entity_id=request_id,
+            nguoi_nhan=admin,
+            da_doc=False,
+        ).update(da_doc=True)
+        if not ThongBao.objects.filter(
+            loai_thong_bao=ThongBao.NotificationType.SYSTEM,
+            related_entity_type=RESTOCK_REQUEST_ACK_ENTITY,
+            related_entity_id=request_id,
+        ).exists():
+            sender = User.objects.filter(
+                pk=request_data.get("sender_id"),
+                role=User.Role.MANAGER,
+                branch__ma_co_so__iexact="CS1",
+            ).first()
+            if sender:
+                notify_users(
+                    users=[sender],
+                    notification_type=ThongBao.NotificationType.SYSTEM,
+                    title="Chủ cửa hàng đã nhận đề nghị nhập hàng",
+                    content=(
+                        f"Chủ cửa hàng đã xem và nhận đề nghị nhập hàng gồm "
+                        f"{len(request_data.get('items', []))} SKU bạn gửi lúc "
+                        f"{timezone.localtime(datetime.fromisoformat(request_data['sent_at'])):%d/%m/%Y %H:%M}. "
+                        "Đây là xác nhận đã nhận thông tin, không phải phê duyệt nhập hàng."
+                    ),
+                    branch=sender.branch,
+                    related_entity_type=RESTOCK_REQUEST_ACK_ENTITY,
+                    related_entity_id=request_id,
+                    target_url=reverse("notifications:list"),
+                )
+
+    return request_data
 
 
 def generate_next_import_code() -> str:
@@ -42,7 +240,6 @@ def generate_next_import_code() -> str:
 
 
 def create_supplier(*, actor: User, ma_nha_cung_cap: str, ten_nha_cung_cap: str, dia_chi: str, sdt: str) -> NhaCungCap:
-    """Create a new supplier (UC-4.11)."""
     assert_can_manage_imports(actor)
     code = ma_nha_cung_cap.strip().upper()
     if not code or not ten_nha_cung_cap.strip() or not dia_chi.strip() or not sdt.strip():
@@ -111,7 +308,6 @@ def create_import_receipt(
     ghi_chu: str = "",
     submit_for_approval: bool = True,
 ) -> PhieuNhapKho:
-    """Create a warehouse import receipt at Central Warehouse (UC-4.1, UC-4.2)."""
     target_branch = co_so_nhan or CoSo.get_central_warehouse()
     if not target_branch:
         raise ValidationError("Chưa cấu hình Cơ sở 1 (Kho tổng) để nhận hàng nhập kho.")
@@ -181,7 +377,6 @@ def update_import_receipt(
     ghi_chu: str = "",
     submit_for_approval: bool = True,
 ) -> PhieuNhapKho:
-    """Update an unapproved import receipt (UC-4.7)."""
     receipt = PhieuNhapKho.objects.select_for_update().get(pk=receipt.pk)
     assert_can_manage_imports(actor, receipt.co_so_nhan)
     if not receipt.is_editable:
@@ -240,7 +435,6 @@ def update_import_receipt(
 
 @transaction.atomic
 def delete_import_receipt(*, actor: User, receipt: PhieuNhapKho) -> str:
-    """Delete an unapproved import receipt (UC-4.8)."""
     receipt = PhieuNhapKho.objects.select_for_update().get(pk=receipt.pk)
     assert_can_manage_imports(actor, receipt.co_so_nhan)
     if not receipt.is_deletable:
@@ -252,10 +446,6 @@ def delete_import_receipt(*, actor: User, receipt: PhieuNhapKho) -> str:
 
 @transaction.atomic
 def approve_import_receipt(*, actor: User, receipt: PhieuNhapKho) -> PhieuNhapKho:
-    """
-    Approve an import receipt (UC-4.9 - ADMIN only).
-    Increases stock at `receipt.co_so_nhan` and records `IMPORT_IN` movements.
-    """
     assert_roles(actor, User.Role.ADMIN)
     receipt = (
         PhieuNhapKho.objects.select_for_update()
@@ -320,7 +510,6 @@ def approve_import_receipt(*, actor: User, receipt: PhieuNhapKho) -> PhieuNhapKh
 
 @transaction.atomic
 def return_import_receipt(*, actor: User, receipt: PhieuNhapKho, reason: str = "") -> PhieuNhapKho:
-    """Return an import receipt to the creator for revision without changing stock (UC-4.9)."""
     assert_roles(actor, User.Role.ADMIN)
     receipt = PhieuNhapKho.objects.select_for_update().get(pk=receipt.pk)
     if receipt.trang_thai == PhieuNhapKho.Status.APPROVED:
@@ -352,7 +541,6 @@ def return_import_receipt(*, actor: User, receipt: PhieuNhapKho, reason: str = "
 
 @transaction.atomic
 def propose_supplier_return(*, actor: User, receipt: PhieuNhapKho, reason: str) -> PhieuNhapKho:
-    """Manager reports defective goods and proposes returning to supplier."""
     assert_can_manage_imports(actor, receipt.co_so_nhan)
     receipt = PhieuNhapKho.objects.select_for_update().get(pk=receipt.pk)
     if receipt.trang_thai == PhieuNhapKho.Status.APPROVED:
@@ -384,7 +572,6 @@ def propose_supplier_return(*, actor: User, receipt: PhieuNhapKho, reason: str) 
 
 @transaction.atomic
 def confirm_supplier_return(*, actor: User, receipt: PhieuNhapKho, admin_note: str = "") -> PhieuNhapKho:
-    """Admin confirms returning defective goods to supplier without adding stock."""
     assert_roles(actor, User.Role.ADMIN)
     receipt = PhieuNhapKho.objects.select_for_update().get(pk=receipt.pk)
     if receipt.trang_thai == PhieuNhapKho.Status.APPROVED:

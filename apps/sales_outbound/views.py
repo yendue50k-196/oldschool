@@ -1,4 +1,3 @@
-"""Views for Sales Outbound Management (UC-5.1, UC-5.2, UC-5.4 to UC-5.12)."""
 from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -156,7 +155,6 @@ def outbound_detail_view(request, receipt_id: int):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER, User.Role.STAFF)
 def outbound_print_view(request, receipt_id: int):
-    """Printable Sales Outbound Slip (UC-5.12)."""
     receipt = get_object_or_404(
         PhieuXuatHangBan.objects.select_related("co_so", "nguoi_tao", "nguoi_ghi_nhan")
         .prefetch_related("lines", "lines__bien_the", "lines__bien_the__san_pham"),
@@ -362,7 +360,6 @@ def outbound_delete_view(request, receipt_id: int):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER, User.Role.STAFF)
 def request_list_create_view(request):
-    """Staff submit counter requests; Admin and Managers view and process them."""
     if request.method == "POST" and request.user.role != User.Role.STAFF:
         raise PermissionDenied("Chỉ Nhân viên bán hàng được tạo yêu cầu xuất từ quầy.")
 

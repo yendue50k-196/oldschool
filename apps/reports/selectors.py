@@ -1,14 +1,3 @@
-"""
-Dynamic Inventory & Supply Chain Reporting Engine (Phase 7 - UC-7.1 to UC-7.5 & Mục 13).
-Computes period metrics directly from immutable `StockMovement` ledger and `TonKho` balances:
-- Tồn đầu kỳ (`opening_qty`)
-- Nhập từ NCC (`import_in_qty`) & Nhập điều chuyển (`transfer_in_qty`) -> Tổng nhập (`total_in_qty`)
-- Xuất bán hàng (`sale_out_qty`) & Xuất điều chuyển (`transfer_out_qty`) -> Tổng xuất (`total_out_qty`)
-- Tồn cuối kỳ (`closing_qty`)
-- Hàng đang vận chuyển (`in_transit_qty`) from `DISPATCHED` interbranch transfers
-- Phân loại: Bán chạy (`best_selling`), Bán chậm / Tồn lâu (`slow_moving`), Sắp hết / Hết hàng (`low_stock`)
-- Giá vốn bình quân (`unit_price` / `cost_price`) tính theo DEC-07 từ các phiếu nhập đã duyệt
-"""
 from datetime import date, datetime, time
 from decimal import Decimal
 from django.db.models import Q, Sum
@@ -50,10 +39,6 @@ def build_inventory_report(
     stock_status: str = "",
     report_tab: str = "all",
 ) -> dict:
-    """
-    Build the comprehensive inventory & supply chain report dataset.
-    Enforces strict branch scoping: Managers only see their own branch.
-    """
     effective_branch = user.branch if user.role != User.Role.ADMIN else selected_branch
     start_date, end_date = parse_report_dates(date_from_str, date_to_str)
 

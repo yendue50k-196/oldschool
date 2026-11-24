@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Thông báo & Cảnh báo Tồn kho | Old School{% endblock %}
+{% block title %}Thông báo & Cảnh báo Tồn kho | Quản lý Kho và Chuỗi cung ứng Cửa Hàng OldSchool{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
@@ -99,12 +99,16 @@
           <strong class="text-dark">{{ notif.tieu_de }}</strong>
           {% if not notif.da_doc %}<span class="badge bg-danger">Chưa đọc</span>{% endif %}
         </div>
-        <p class="mb-1 small text-secondary">{{ notif.noi_dung }}</p>
+        {% if notif.related_entity_type == 'StockRestockRequest' %}
+          <p class="mb-1 small text-secondary">Đề nghị nhập hàng từ CS1. Mở chi tiết để xem danh sách SKU và xác nhận đã nhận thông tin.</p>
+        {% else %}
+          <p class="mb-1 small text-secondary">{{ notif.noi_dung }}</p>
+        {% endif %}
         <small class="text-muted"><i class="bi bi-clock me-1"></i>{{ notif.created_at|date:"d/m/Y H:i" }}</small>
       </div>
       <div>
         <a href="{% url 'notifications:mark_read' notif.id %}" class="btn btn-sm btn-outline-dark">
-          Xem chi tiết <i class="bi bi-arrow-right ms-1"></i>
+          {% if notif.related_entity_type == 'StockRestockRequest' %}Xem đề nghị{% else %}Xem chi tiết{% endif %} <i class="bi bi-arrow-right ms-1"></i>
         </a>
       </div>
     </div>

@@ -1,4 +1,3 @@
-"""Views for Dynamic Inventory & Supply Chain Reporting (UC-7.1 to UC-7.5)."""
 import json
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
@@ -83,7 +82,6 @@ def report_dashboard_view(request):
 
 @role_required(User.Role.ADMIN, User.Role.MANAGER)
 def report_variant_detail_view(request, variant_id: int):
-    """Detailed stock ledger drill-down for a specific SKU (UC-7.2)."""
     selected_branch = get_effective_branch(request, allow_all_for_admin=True)
     variant = get_object_or_404(BienThe.objects.select_related("san_pham"), pk=variant_id)
     movements = get_variant_ledger_movements(user=request.user, variant=variant, selected_branch=selected_branch)

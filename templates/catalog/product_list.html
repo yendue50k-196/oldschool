@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% block title %}Danh mục Hàng hóa & Tồn kho | Old School{% endblock %}
+{% block title %}Danh mục Hàng hóa & Tồn kho | Quản lý Kho và Chuỗi cung ứng Cửa Hàng OldSchool{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+<div class="catalog-page">
+<div class="catalog-heading d-flex justify-content-between align-items-center flex-wrap gap-3">
   <div>
-    <h4 class="fw-bold mb-0"><i class="bi bi-box-seam-fill me-2"></i>Danh mục Hàng hóa & Tra cứu Tồn kho</h4>
-    <p class="text-muted small mb-0">
+    <h1 class="fw-bold mb-1"><i class="bi bi-box-seam-fill me-2"></i>Danh mục Hàng hóa &amp; Tra cứu Tồn kho</h1>
+    <p class="text-muted mb-0">
       Tra cứu thông tin sản phẩm, biến thể (Màu / Size) và lượng tồn kho thực tế theo cơ sở
     </p>
   </div>
   {% if can_edit %}
-  <a href="{% url 'catalog:product_create' %}" class="btn btn-os-primary">
+  <a href="{% url 'catalog:product_create' %}" class="btn btn-os-primary catalog-add-button">
     <i class="bi bi-plus-lg me-1"></i>Thêm mặt hàng mới
   </a>
   {% endif %}
 </div>
 
-<!-- Search & Filter Bar (Figma C.I Layout) -->
-<div class="os-card p-3 mb-4">
-  <form method="get" class="row g-2 align-items-end">
+<div class="os-card catalog-filter-card">
+  <form method="get" class="row g-3 align-items-end">
     <div class="col-md-3">
-      <label class="form-label small fw-semibold mb-1">Tìm nhanh (Mã SP / SKU / Tên)</label>
-      <input type="text" name="q" value="{{ filters.q }}" class="form-control form-control-sm" placeholder="Nhập mã SP, mã SKU hoặc tên...">
+      <label class="form-label fw-semibold">Tìm nhanh (Mã SP / SKU / Tên)</label>
+      <input type="text" name="q" value="{{ filters.q }}" class="form-control" placeholder="Nhập mã SP, mã SKU hoặc tên...">
     </div>
     <div class="col-md-2">
-      <label class="form-label small fw-semibold mb-1">Nhóm hàng</label>
-      <select name="nhom_hang" class="form-select form-select-sm">
+      <label class="form-label fw-semibold">Nhóm hàng</label>
+      <select name="nhom_hang" class="form-select">
         <option value="">-- Tất cả nhóm --</option>
         {% for c in categories %}
         <option value="{{ c }}" {% if filters.nhom_hang == c %}selected{% endif %}>{{ c }}</option>
@@ -33,8 +33,8 @@
       </select>
     </div>
     <div class="col-md-2">
-      <label class="form-label small fw-semibold mb-1">Màu sắc</label>
-      <select name="mau_sac" class="form-select form-select-sm">
+      <label class="form-label fw-semibold">Màu sắc</label>
+      <select name="mau_sac" class="form-select">
         <option value="">-- Tất cả màu --</option>
         {% for color in colors %}
         <option value="{{ color }}" {% if filters.mau_sac == color %}selected{% endif %}>{{ color }}</option>
@@ -42,8 +42,8 @@
       </select>
     </div>
     <div class="col-md-1">
-      <label class="form-label small fw-semibold mb-1">Size</label>
-      <select name="kich_co" class="form-select form-select-sm">
+      <label class="form-label fw-semibold">Size</label>
+      <select name="kich_co" class="form-select">
         <option value="">Tất cả</option>
         {% for sz in sizes %}
         <option value="{{ sz }}" {% if filters.kich_co == sz %}selected{% endif %}>{{ sz }}</option>
@@ -51,20 +51,20 @@
       </select>
     </div>
     <div class="col-md-2">
-      <label class="form-label small fw-semibold mb-1">Tình trạng tồn kho</label>
-      <select name="tinh_trang" class="form-select form-select-sm">
+      <label class="form-label fw-semibold">Tình trạng tồn kho</label>
+      <select name="tinh_trang" class="form-select">
         <option value="">-- Tất cả trạng thái --</option>
         {% for st_code, st_label in stock_statuses %}
         <option value="{{ st_code }}" {% if filters.tinh_trang == st_code %}selected{% endif %}>{{ st_label }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2 d-flex gap-1">
-      <button type="submit" class="btn btn-sm btn-os-primary flex-grow-1">
+    <div class="col-md-2 d-flex gap-2 catalog-filter-actions">
+      <button type="submit" class="btn btn-os-primary flex-grow-1">
         <i class="bi bi-search me-1"></i>Lọc / Tìm
       </button>
-      <a href="{% url 'catalog:product_list' %}" class="btn btn-sm btn-outline-secondary" title="Xóa bộ lọc">
-        <i class="bi bi-arrow-counterclockwise"></i>
+      <a href="{% url 'catalog:product_list' %}" class="btn btn-outline-secondary" title="Xóa bộ lọc" aria-label="Đặt lại bộ lọc">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Đặt lại
       </a>
     </div>
   </form>
@@ -73,7 +73,7 @@
 <!-- Product & Variant Table -->
 <div class="os-card">
   <div class="table-responsive">
-    <table class="table os-table">
+    <table class="table os-table os-catalog-table">
       <thead>
         <tr>
           <th>Mã SP</th>
@@ -99,9 +99,9 @@
           <td>
             <div class="d-flex align-items-center gap-2">
               {% if p.hinh_anh %}
-                <img src="{{ p.hinh_anh.url }}" alt="{{ p.ten_hang_hoa }}" class="rounded border shadow-sm" style="width: 38px; height: 38px; object-fit: cover; flex-shrink: 0;">
+                <img src="{{ p.hinh_anh.url }}" alt="{{ p.ten_hang_hoa }}" class="catalog-product-image rounded border shadow-sm">
               {% else %}
-                <div class="rounded border bg-light text-muted d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; flex-shrink: 0;" title="Chưa có ảnh">
+                <div class="catalog-product-image rounded border bg-light text-muted d-flex align-items-center justify-content-center" title="Chưa có ảnh">
                   <i class="bi bi-image text-secondary opacity-50 small"></i>
                 </div>
               {% endif %}
@@ -112,10 +112,10 @@
           <td>{{ p.don_vi_tinh }}</td>
           <td class="text-end fw-semibold">{{ p.don_gia_niem_yet|intcomma }} đ</td>
           <td>
-            <div class="d-flex flex-wrap gap-1">
+            <div class="catalog-variant-list">
               {% for vr in p.computed_variants %}
-              <span class="badge bg-light text-dark border">
-                <code>{{ vr.variant.ma_sku }}</code> ({{ vr.variant.mau_sac }}/{{ vr.variant.kich_co }}):
+              <span class="catalog-variant-chip">
+                <code>{{ vr.variant.ma_sku }}</code> <span>({{ vr.variant.mau_sac }}/{{ vr.variant.kich_co }}):</span>
                 <strong class="{% if vr.so_luong == 0 %}text-danger{% elif vr.so_luong <= vr.muc_ton_toi_thieu %}text-warning-emphasis{% else %}text-success{% endif %}">{{ vr.so_luong }}</strong>
               </span>
               {% endfor %}
@@ -209,4 +209,5 @@ function openDeleteProductModal(productId, productCode, productName) {
 }
 </script>
 {% endif %}
+</div>
 {% endblock %}

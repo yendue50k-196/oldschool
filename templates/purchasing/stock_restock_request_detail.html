@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Chi tiết đề nghị nhập hàng | Quản lý Kho và Chuỗi cung ứng Cửa Hàng OldSchool{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="fw-bold mb-0"><i class="bi bi-inbox-check me-2"></i>Chi tiết đề nghị nhập hàng CS1</h4>
+    <p class="text-muted small mb-0">ADMIN đã mở thông báo; đây là đề nghị, không phải phiếu nhập hay phê duyệt nhập hàng.</p>
+  </div>
+  <a href="{% url 'notifications:list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Trung tâm Thông báo
+  </a>
+</div>
+
+<div class="os-card p-3 mb-3">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="small text-muted">Người gửi</div>
+      <div class="fw-semibold">{{ request_data.sender_name }} ({{ request_data.sender_username }})</div>
+    </div>
+    <div class="col-md-6">
+      <div class="small text-muted">Cơ sở</div>
+      <div class="fw-semibold">CS1 — {{ request_data.branch_name }}</div>
+    </div>
+    <div class="col-md-6">
+      <div class="small text-muted">Thời gian gửi</div>
+      <div class="fw-semibold">{{ request_data.sent_at|date:"d/m/Y H:i:s" }}</div>
+    </div>
+    <div class="col-12">
+      <div class="small text-muted">Lý do đề nghị</div>
+      <div class="text-break">{{ request_data.reason|linebreaksbr }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="os-card">
+  <div class="os-card-header">
+    <i class="bi bi-list-ul me-2"></i>Danh sách SKU đề nghị
+  </div>
+  <div class="table-responsive">
+    <table class="table os-table mb-0">
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Tên hàng hóa</th>
+          <th>Màu / Size</th>
+          <th class="text-center">Tồn CS1 lúc gửi</th>
+          <th class="text-center">Số lượng đề nghị</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in request_data.items %}
+        <tr>
+          <td><code>{{ item.sku }}</code></td>
+          <td>{{ item.product_name }}</td>
+          <td>{{ item.color }} / {{ item.size }}</td>
+          <td class="text-center fw-semibold">{{ item.stock|intcomma }}</td>
+          <td class="text-center fw-bold">{{ item.quantity|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

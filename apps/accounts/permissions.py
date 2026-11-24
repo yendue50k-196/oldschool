@@ -1,4 +1,3 @@
-"""Centralized RBAC and branch-isolation policies for Old School."""
 from functools import wraps
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
@@ -8,12 +7,6 @@ from apps.branches.models import CoSo
 
 
 def get_effective_branch(request, allow_all_for_admin: bool = True):
-    """
-    Determine the active branch for the current request.
-    - MANAGER / STAFF: Always locked to `request.user.branch`.
-    - ADMIN: Uses `?branch=<id|code>` or session `selected_branch_id`.
-      If `allow_all_for_admin` is False and no branch is selected, defaults to Central Warehouse (CS1).
-    """
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return None
@@ -50,7 +43,6 @@ def get_effective_branch(request, allow_all_for_admin: bool = True):
 
 
 def assert_roles(user, *allowed_roles):
-    """Ensure the user is authenticated, active, and has one of the allowed business roles."""
     if not user or not user.is_authenticated or not user.is_active:
         raise PermissionDenied("Bạn cần đăng nhập bằng tài khoản hợp lệ để thực hiện thao tác này.")
     if user.role not in allowed_roles:
@@ -58,10 +50,6 @@ def assert_roles(user, *allowed_roles):
 
 
 def assert_branch_access(user, branch_or_id):
-    """
-    Ensure the user is authorized to access or mutate data belonging to `branch_or_id`.
-    Never trust browser-supplied branch IDs for Manager or Staff users.
-    """
     if not user or not user.is_authenticated or not user.is_active:
         raise PermissionDenied("Phiên đăng nhập không hợp lệ.")
     if user.role == User.Role.ADMIN:
@@ -82,9 +70,6 @@ def is_central_warehouse(branch: CoSo | None) -> bool:
 
 
 def assert_can_manage_imports(user, branch: CoSo | None = None):
-    """
-    Import receipts are created/managed by CS1 (Kho tổng) Manager (or Admin).
-    """
     assert_roles(user, User.Role.ADMIN, User.Role.MANAGER)
     if user.role == User.Role.MANAGER:
         if not is_central_warehouse(user.branch):
@@ -94,7 +79,6 @@ def assert_can_manage_imports(user, branch: CoSo | None = None):
 
 
 def scope_queryset_by_branch(queryset, user, branch_field: str = "co_so", selected_branch: CoSo | None = None):
-    """Filter a queryset according to the user's branch authorization."""
     if not user or not user.is_authenticated:
         return queryset.none()
     if user.role == User.Role.ADMIN:
@@ -107,7 +91,6 @@ def scope_queryset_by_branch(queryset, user, branch_field: str = "co_so", select
 
 
 def role_required(*allowed_roles):
-    """View decorator enforcing login and allowed business roles."""
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):

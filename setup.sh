@@ -87,11 +87,7 @@ fi
 # 5. Migrate & Seed
 echo "[5/6] Chạy Django Migrations và khởi tạo dữ liệu mẫu ($BRANCHES cơ sở)..."
 "$VENV_PY" manage.py migrate
-if [ "$BRANCHES" -eq 3 ]; then
-  "$VENV_PY" manage.py seed_oldschool_3b
-else
-  "$VENV_PY" manage.py seed_oldschool
-fi
+"$VENV_PY" manage.py seed_oldschool --branches "$BRANCHES"
 
 echo ""
 echo "======================================================================"

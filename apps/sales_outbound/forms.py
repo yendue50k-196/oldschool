@@ -1,4 +1,3 @@
-"""Forms for Sales Outbound Requests & Receipts."""
 from django import forms
 from apps.sales_outbound.models import PhieuXuatHangBan, YeuCauXuatHang
 

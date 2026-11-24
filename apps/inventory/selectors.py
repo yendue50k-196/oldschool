@@ -1,4 +1,3 @@
-"""Selectors for querying stock balances and movements (UC-5.1)."""
 from django.db.models import F, Q
 from apps.accounts.models import User
 from apps.branches.models import CoSo

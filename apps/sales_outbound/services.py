@@ -1,11 +1,3 @@
-"""
-Sales Outbound Request & Receipt Services (Phase 4 - UC-5.1 to UC-5.13).
-Enforces:
-- Branch isolation (Manager/Staff only operate on their own branch)
-- Atomic stock deduction with `select_for_update()` ONLY when receipt is finalized (`COMPLETED`, UC-5.6)
-- Automatic low-stock evaluation after deduction (UC-5.13)
-- Strict separation between Sales Outbound (`PhieuXuatHangBan`) and Interbranch Transfer (`PhieuDieuChuyen`)
-"""
 from dataclasses import dataclass
 from decimal import Decimal
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -80,7 +72,6 @@ def create_outbound_request(
     phuong_thuc_giao: str = YeuCauXuatHang.DeliveryMethod.COUNTER,
     ghi_chu: str = "",
 ) -> YeuCauXuatHang:
-    """Create a counter sales outbound request submitted by sales staff."""
     assert_roles(actor, User.Role.STAFF)
     assert_branch_access(actor, co_so)
 
@@ -138,7 +129,6 @@ def create_outbound_request(
 
 @transaction.atomic
 def reject_outbound_request(*, actor: User, request_obj: YeuCauXuatHang, reason: str = "") -> YeuCauXuatHang:
-    """Reject a sales outbound request when stock is unavailable or request is cancelled."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     request_obj = YeuCauXuatHang.objects.select_for_update().get(pk=request_obj.pk)
     assert_branch_access(actor, request_obj.co_so)
@@ -230,7 +220,6 @@ def create_outbound_receipt(
     ghi_chu: str = "",
     finalize_immediately: bool = False,
 ) -> PhieuXuatHangBan:
-    """Create a Sales Outbound Receipt (UC-5.1, UC-5.2)."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN, User.Role.STAFF)
     assert_branch_access(actor, co_so)
 
@@ -296,7 +285,6 @@ def update_outbound_receipt(
     phuong_thuc_giao: str = "",
     ghi_chu: str = "",
 ) -> PhieuXuatHangBan:
-    """Update an unfinalized Sales Outbound Receipt (UC-5.5)."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN, User.Role.STAFF)
     receipt = PhieuXuatHangBan.objects.select_for_update().select_related("co_so").get(pk=receipt.pk)
     assert_branch_access(actor, receipt.co_so)
@@ -331,11 +319,6 @@ def update_outbound_receipt(
 
 @transaction.atomic
 def finalize_outbound_receipt(*, actor: User, receipt: PhieuXuatHangBan) -> PhieuXuatHangBan:
-    """
-    Finalize a Sales Outbound Receipt (`Ghi nhận xuất kho`, UC-5.6).
-    Atomically locks branch stock rows, verifies sufficiency, deducts stock,
-    creates `SALE_OUT` ledger movements, and triggers low-stock warnings (UC-5.13).
-    """
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN, User.Role.STAFF)
     receipt = (
         PhieuXuatHangBan.objects.select_for_update(of=("self",))
@@ -405,7 +388,6 @@ def finalize_outbound_receipt(*, actor: User, receipt: PhieuXuatHangBan) -> Phie
 
 @transaction.atomic
 def delete_outbound_receipt(*, actor: User, receipt: PhieuXuatHangBan) -> str:
-    """Delete an unfinalized Sales Outbound Receipt (UC-5.7)."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     receipt = PhieuXuatHangBan.objects.select_for_update(of=("self",)).select_related("yeu_cau_xuat").get(pk=receipt.pk)
     assert_branch_access(actor, receipt.co_so)

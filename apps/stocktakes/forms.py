@@ -1,4 +1,3 @@
-"""Forms for Stocktake / Inventory Count Records."""
 from django import forms
 
 

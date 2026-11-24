@@ -12,7 +12,6 @@ class StockStatus(models.TextChoices):
 
 
 class TonKho(models.Model):
-    """Branch-specific stock balance per product variant (TonKho)."""
 
     co_so = models.ForeignKey(
         "branches.CoSo",
@@ -62,7 +61,6 @@ class TonKho(models.Model):
 
     @property
     def trang_thai_ton(self) -> str:
-        """Vietnamese alias for stock_status property."""
         return self.stock_status
 
     @property
@@ -80,7 +78,6 @@ class TonKho(models.Model):
 
 
 class StockMovement(models.Model):
-    """Immutable inventory ledger record for auditability and dynamic reporting."""
 
     class MovementType(models.TextChoices):
         OPENING = "OPENING", "Tồn đầu kỳ"

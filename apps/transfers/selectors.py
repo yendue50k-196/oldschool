@@ -1,4 +1,3 @@
-"""Selectors for Interbranch Transfers (UC-5.3)."""
 from django.db.models import Q, QuerySet
 from apps.accounts.models import User
 from apps.branches.models import CoSo

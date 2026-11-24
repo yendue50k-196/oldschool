@@ -1,4 +1,3 @@
-"""Business services for Product Catalogue and Variants (UC-3, UC-3.1 to UC-3.7)."""
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -14,13 +13,20 @@ from apps.stocktakes.models import ChiTietKiemKe
 from apps.transfers.models import ChiTietPhieuDieuChuyen
 
 
+def _to_ascii_upper(text: str) -> str:
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFKD", (text or "").replace("đ", "d").replace("Đ", "D"))
+    ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return ascii_text.upper()
+
+
 def generate_sku(ma_san_pham: str, mau_sac: str, kich_co: str) -> str:
     import re
-    from text_unidecode import unidecode
 
-    clean_prod = re.sub(r"[^A-Z0-9]", "", unidecode(ma_san_pham).upper())
-    clean_color = re.sub(r"[^A-Z0-9]", "", unidecode(mau_sac).upper())[:6] or "STD"
-    clean_size = re.sub(r"[^A-Z0-9]", "", unidecode(kich_co).upper())[:4] or "FS"
+    clean_prod = re.sub(r"[^A-Z0-9]", "", _to_ascii_upper(ma_san_pham))
+    clean_color = re.sub(r"[^A-Z0-9]", "", _to_ascii_upper(mau_sac))[:6] or "STD"
+    clean_size = re.sub(r"[^A-Z0-9]", "", _to_ascii_upper(kich_co))[:4] or "FS"
     return f"{clean_prod}-{clean_color}-{clean_size}"
 
 
@@ -39,7 +45,6 @@ def create_product_with_variants(
     variants_data: list[dict] | None = None,
     min_threshold: int = 5,
 ) -> SanPham:
-    """Create a product master and its SKU variants, initializing branch stock rows."""
     assert_roles(actor, User.Role.ADMIN, User.Role.MANAGER)
 
     clean_code = (ma_san_pham or "").strip().upper()
@@ -116,7 +121,6 @@ def update_product_and_variants(
     variants_data: list[dict] | None = None,
     min_threshold: int | None = None,
 ) -> SanPham:
-    """Update product fields and add/update its variants (UC-3.5)."""
     assert_roles(actor, User.Role.ADMIN, User.Role.MANAGER)
 
     product.ten_hang_hoa = (ten_hang_hoa or "").strip()
@@ -197,7 +201,6 @@ def update_product_and_variants(
 
 
 def has_product_transactions(product: SanPham) -> bool:
-    """Return True if any variant of `product` has historical transactions or positive stock."""
     variant_ids = list(product.variants.values_list("id", flat=True))
     if not variant_ids:
         return False
@@ -214,10 +217,6 @@ def has_product_transactions(product: SanPham) -> bool:
 
 @transaction.atomic
 def delete_product(*, actor: User, product: SanPham) -> None:
-    """
-    Delete a product only if it has no associated transactions (UC-3.4).
-    Otherwise raise a clear Vietnamese ValidationError per UC-3.4 E1.
-    """
     assert_roles(actor, User.Role.ADMIN, User.Role.MANAGER)
     if has_product_transactions(product):
         raise ValidationError(
@@ -231,7 +230,6 @@ def delete_product(*, actor: User, product: SanPham) -> None:
 
 @transaction.atomic
 def toggle_product_business_status(*, actor: User, product: SanPham) -> SanPham:
-    """Discontinue or reactivate a product without deleting historical records (UC-3)."""
     assert_roles(actor, User.Role.ADMIN, User.Role.MANAGER)
     if product.trang_thai == SanPham.Status.ACTIVE:
         product.trang_thai = SanPham.Status.DISCONTINUED

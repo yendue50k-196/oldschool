@@ -1,1 +1,0 @@
-"""Sales Outbound App Package."""

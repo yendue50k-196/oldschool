@@ -1,4 +1,3 @@
-"""Forms for Interbranch Transfers."""
 from django import forms
 from apps.branches.models import CoSo
 

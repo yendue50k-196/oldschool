@@ -5,8 +5,6 @@ from django.utils import timezone
 
 
 class User(AbstractUser):
-    """Custom business user model supporting ADMIN, MANAGER, and STAFF roles."""
-
     class Role(models.TextChoices):
         ADMIN = "ADMIN", "Chủ (Admin)"
         MANAGER = "MANAGER", "Quản lý cơ sở"

@@ -1,4 +1,3 @@
-"""Selectors for Product Catalogue with branch-scoped variant stock evaluation (UC-3.1, UC-3.6, UC-3.7)."""
 from django.db.models import Prefetch, Q
 from apps.accounts.models import User
 from apps.branches.models import CoSo
@@ -7,10 +6,6 @@ from apps.inventory.models import StockStatus, TonKho
 
 
 def evaluate_product_row(product: SanPham, active_branch: CoSo | None):
-    """
-    Attach computed stock total, variant breakdown, and branch stock status badge
-    to a product instance for template rendering.
-    """
     variants = list(product.variants.all())
     total_stock = 0
     has_out = False
@@ -135,7 +130,6 @@ def list_catalog_products(
 
 
 def get_distinct_categories() -> list[str]:
-    """Return sorted distinct product group names (`nhom_hang`)."""
     return list(
         SanPham.objects.exclude(nhom_hang="")
         .values_list("nhom_hang", flat=True)

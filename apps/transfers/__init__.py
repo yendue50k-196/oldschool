@@ -1,1 +1,0 @@
-"""Interbranch Transfers App Package."""

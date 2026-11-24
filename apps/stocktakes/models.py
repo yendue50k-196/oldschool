@@ -6,7 +6,6 @@ from django.utils import timezone
 
 
 class KiemKe(models.Model):
-    """Inventory Count Record (Bảng 64 - KiemKe, UC-6.1 to UC-6.10)."""
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Chờ duyệt"
@@ -90,7 +89,6 @@ class KiemKe(models.Model):
 
 
 class ChiTietKiemKe(models.Model):
-    """Inventory Count Detail Line (Bảng 65 - ChiTietKiemKe)."""
 
     class ReconciliationStatus(models.TextChoices):
         MATCH = "MATCH", "Khớp"

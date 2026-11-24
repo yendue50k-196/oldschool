@@ -1,4 +1,3 @@
-"""Selectors for Sales Outbound Requests & Receipts (UC-5.4 to UC-5.8)."""
 from django.db.models import Q, QuerySet
 from apps.accounts.models import User
 from apps.accounts.permissions import scope_queryset_by_branch

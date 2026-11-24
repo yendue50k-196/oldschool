@@ -5,7 +5,6 @@ from django.db.models import Q
 
 
 class SanPham(models.Model):
-    """Product master entity (Bảng 55 - SanPham, separated from variants)."""
 
     class Status(models.TextChoices):
         ACTIVE = "ACTIVE", "Đang kinh doanh"
@@ -21,7 +20,7 @@ class SanPham(models.Model):
         decimal_places=0,
         default=Decimal("0"),
     )
-    hinh_anh = models.ImageField("Hình ảnh", upload_to="products/", null=True, blank=True)
+    hinh_anh = models.ImageField("Hình ảnh", upload_to="products/", max_length=255, null=True, blank=True)
     ghi_chu = models.TextField("Mô tả / Ghi chú", blank=True, default="")
     trang_thai = models.CharField(
         "Trạng thái kinh doanh",
@@ -57,7 +56,6 @@ class SanPham(models.Model):
 
 
 class BienThe(models.Model):
-    """Product Variant / SKU entity (BienThe on ERD, Mục VI.1)."""
 
     class Status(models.TextChoices):
         ACTIVE = "ACTIVE", "Đang hoạt động"

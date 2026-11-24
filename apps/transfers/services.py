@@ -1,12 +1,3 @@
-"""
-Interbranch Transfer Services (Phase 5 - UC-5.3 & Hình 6 of Specification).
-Implements two-step stock accounting:
-1. REQUESTED -> ACCEPTED / REJECTED by source branch manager (`co_so_xuat`).
-2. DISPATCHED (`Xuất điều chuyển`): Atomically deducts `so_luong_xuat` from `co_so_xuat`
-   with `TRANSFER_OUT` ledger movement. Destination stock is NOT increased yet (in-transit).
-3. RECEIVED / RECEIVED_WITH_SHORTAGE (`Xác nhận nhận hàng`): Atomically increases
-   `so_luong_nhan` at `co_so_nhan` with `TRANSFER_IN` ledger movement.
-"""
 from dataclasses import dataclass
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -54,11 +45,6 @@ def create_transfer_request(
     ly_do: str = "Bổ sung tồn kho cơ sở thiếu hàng",
     ghi_chu: str = "",
 ) -> PhieuDieuChuyen:
-    """
-    Create an Interbranch Transfer Request (UC-5.3).
-    Typically initiated by the receiving branch (`co_so_nhan`) or by ADMIN / source branch.
-    For MANAGER, the actor must belong to either `co_so_nhan` or `co_so_xuat`.
-    """
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     if co_so_xuat.id == co_so_nhan.id:
         raise ValidationError("Cơ sở xuất và Cơ sở nhận phải khác nhau.")
@@ -129,7 +115,6 @@ def create_transfer_request(
 
 @transaction.atomic
 def accept_transfer(*, actor: User, transfer: PhieuDieuChuyen) -> PhieuDieuChuyen:
-    """Source branch manager accepts the transfer request before dispatching."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     transfer = PhieuDieuChuyen.objects.select_for_update().select_related("co_so_xuat", "co_so_nhan").get(pk=transfer.pk)
     assert_branch_access(actor, transfer.co_so_xuat)
@@ -142,7 +127,6 @@ def accept_transfer(*, actor: User, transfer: PhieuDieuChuyen) -> PhieuDieuChuye
 
 @transaction.atomic
 def reject_transfer(*, actor: User, transfer: PhieuDieuChuyen, reason: str = "") -> PhieuDieuChuyen:
-    """Source branch manager rejects the transfer request when stock cannot be supplied."""
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     transfer = PhieuDieuChuyen.objects.select_for_update().select_related("co_so_xuat", "co_so_nhan").get(pk=transfer.pk)
     assert_branch_access(actor, transfer.co_so_xuat)
@@ -176,11 +160,6 @@ def dispatch_transfer(
     transfer: PhieuDieuChuyen,
     dispatched_quantities: dict[int, int] | None = None,
 ) -> PhieuDieuChuyen:
-    """
-    Step 1 of stock accounting: Source branch (`co_so_xuat`) dispatches goods (`DISPATCHED`).
-    Deducts `so_luong_xuat` from `co_so_xuat` via `TRANSFER_OUT`.
-    Destination branch stock (`co_so_nhan`) is NOT increased until `receive_transfer`.
-    """
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     transfer = (
         PhieuDieuChuyen.objects.select_for_update()
@@ -268,11 +247,6 @@ def receive_transfer(
     received_quantities: dict[int, int] | None = None,
     shortage_note: str = "",
 ) -> PhieuDieuChuyen:
-    """
-    Step 2 of stock accounting: Destination branch (`co_so_nhan`) confirms receipt.
-    Increases `co_so_nhan` stock by `so_luong_nhan` via `TRANSFER_IN`.
-    If any line has `so_luong_nhan < so_luong_xuat`, status becomes `RECEIVED_WITH_SHORTAGE`.
-    """
     assert_roles(actor, User.Role.MANAGER, User.Role.ADMIN)
     transfer = (
         PhieuDieuChuyen.objects.select_for_update()
