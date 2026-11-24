@@ -7,8 +7,6 @@ venv/
 env/
 .env
 db.sqlite3
-media/products/*
-!media/products/.gitkeep
 staticfiles/
 .pytest_cache/
 htmlcov/
